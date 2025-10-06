@@ -8,11 +8,19 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "next": "14.0.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "framer-motion": "10.12.16",
     "lucide-react": "0.275.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/react": "^18.2.0",
+    "@types/node": "^20.0.0"
   }
 }
