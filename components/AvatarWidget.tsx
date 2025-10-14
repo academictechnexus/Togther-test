@@ -8,9 +8,9 @@ import { Mic, Keyboard, Send, Volume2, Slash, X } from "lucide-react";
  * AvatarWidget - Voice-first mascot UI with:
  * - Floating mascot that listens & speaks
  * - Chat modal (full history + composer) opened by keyboard icon
- * - Listening visual (animated rings/waveform) while speech recognition active
+ * - Listening visual (animated rings) while speech recognition active
  *
- * Replace components/AvatarWidget.tsx with this file.
+ * TypeScript-safe: avatarRef typed as HTMLButtonElement to avoid ref errors
  */
 
 /* ---------- types ---------- */
@@ -50,7 +50,6 @@ function speakText(text?: string, lang = "en-US") {
 
 /* ---------- component ---------- */
 export default function AvatarWidget() {
-  // UI state
   const [selectedMascot, setSelectedMascot] = useState<string>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.mascot")) || "sunny");
   const [muted, setMuted] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.muted") === "true") || false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -62,12 +61,11 @@ export default function AvatarWidget() {
   const [recommended, setRecommended] = useState<Product[]>([]);
   const [mockMode] = useState<boolean>(() => !API_URL);
 
-  // refs
-  const avatarRef = useRef<HTMLDivElement | null>(null);
+  // Refs
+  const avatarRef = useRef<HTMLButtonElement | null>(null); // correct type for button ref
   const speechRecRef = useRef<any>(null);
   const mounted = useRef(false);
 
-  // persist selection + muted
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("avatar.mascot", selectedMascot);
   }, [selectedMascot]);
@@ -75,7 +73,6 @@ export default function AvatarWidget() {
     if (typeof window !== "undefined") localStorage.setItem("avatar.muted", muted ? "true" : "false");
   }, [muted]);
 
-  // initial greeting
   useEffect(() => {
     if (mounted.current) return;
     mounted.current = true;
@@ -85,12 +82,10 @@ export default function AvatarWidget() {
     if (!muted) speakText(greeting);
   }, []); // eslint-disable-line
 
-  // helper to push message
   function pushMessage(m: Message) {
     setMessages((s) => [...s, m]);
   }
 
-  // compute mouth position
   function getMouthPos() {
     const m = MASCOTS.find((x) => x.id === selectedMascot) || MASCOTS[0];
     const anchor = m.mouthAnchor || { x: 0.5, y: 0.6 };
@@ -100,7 +95,7 @@ export default function AvatarWidget() {
     return { left: rect.left + rect.width * anchor.x, top: rect.top + rect.height * anchor.y };
   }
 
-  /* ---------- speech recognition (voice input) ---------- */
+  /* ---------- speech recognition ---------- */
   const startListening = () => {
     if (typeof window === "undefined") return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -159,7 +154,6 @@ export default function AvatarWidget() {
       setLastAssistantText(answer);
       setLastAssistantAudio(data.speech_url || null);
       setRecommended(data.recommended_products || []);
-      // speak
       if (!muted) {
         if (data.speech_url) {
           const a = new Audio(data.speech_url);
@@ -177,7 +171,6 @@ export default function AvatarWidget() {
     }
   }
 
-  // mock reply
   async function mockReply(message: string) {
     await new Promise((r) => setTimeout(r, 600 + Math.random() * 700));
     const lower = message.toLowerCase();
@@ -201,7 +194,6 @@ export default function AvatarWidget() {
   async function handleSend(textOverride?: string) {
     const text = ((textOverride ?? "") || "").trim();
     if (!text) return;
-    // user message already pushed by voice flow; if typing from modal push here
     if (!messages.some((m) => m.sender === "user" && m.text === text)) {
       pushMessage({ id: `u-${Date.now()}`, text, sender: "user", time: new Date().toISOString() });
     }
@@ -210,20 +202,12 @@ export default function AvatarWidget() {
     await callBackend(text);
   }
 
-  // add to cart stub
   function handleAddToCart(p: Product) {
     pushMessage({ id: `c-${Date.now()}`, text: `${p.title} added to cart.`, sender: "assistant", time: new Date().toISOString() });
-    // implement server-side call to add to cart in production
+    // production: call server-side shopify add-to-cart
   }
 
-  // selected mascot and mouth position
   const selected = MASCOTS.find((m) => m.id === selectedMascot) || MASCOTS[0];
-  const mouthPos = (() => {
-    const el = avatarRef.current;
-    if (!el) return { right: 24 + 92 + 12, bottom: 24 + 40 };
-    const rect = el.getBoundingClientRect();
-    return { left: rect.left + rect.width * (selected.mouthAnchor.x || 0.5), top: rect.top + rect.height * (selected.mouthAnchor.y || 0.6) };
-  })();
 
   return (
     <>
@@ -238,7 +222,6 @@ export default function AvatarWidget() {
         </button>
 
         <div style={{ position: "relative", width: 92, height: 92 }}>
-          {/* listening visual (rings/wave) */}
           <AnimatePresence>
             {listening && (
               <motion.div
@@ -273,7 +256,6 @@ export default function AvatarWidget() {
             </div>
           </motion.button>
 
-          {/* mute badge */}
           <div style={{ position: "absolute", right: -6, bottom: -6 }}>
             <button onClick={() => setMuted((s) => !s)} title={muted ? "Unmute" : "Mute"} style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: "#fff", boxShadow: "0 6px 14px rgba(2,6,23,0.12)", cursor: "pointer" }}>
               {muted ? <Slash /> : <Volume2 />}
@@ -311,7 +293,7 @@ export default function AvatarWidget() {
         )}
       </AnimatePresence>
 
-      {/* Chat modal (full conversation + composer) */}
+      {/* Chat modal */}
       <AnimatePresence>
         {chatModalOpen && (
           <motion.div
@@ -358,7 +340,6 @@ export default function AvatarWidget() {
                   ))}
                 </div>
 
-                {/* recommended */}
                 {recommended.length > 0 && (
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: 8 }}>Recommended for you</div>
@@ -377,7 +358,6 @@ export default function AvatarWidget() {
                   </div>
                 )}
 
-                {/* composer */}
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     placeholder="Type your message or press Send..."
@@ -396,7 +376,7 @@ export default function AvatarWidget() {
         )}
       </AnimatePresence>
 
-      {/* tiny scoped CSS */}
+      {/* small scoped CSS */}
       <style jsx>{`
         .ring {
           position: absolute;
