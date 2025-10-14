@@ -143,9 +143,9 @@ function speakText(text: string | undefined, lang = "en-US") {
 
 /* ---------- component ---------- */
 export default function AvatarWidgetFuturistic() {
-  const [open, setOpen] = useState<boolean>(() => (localStorage.getItem("avatar.open") ? localStorage.getItem("avatar.open") === "true" : true));
-  const [muted, setMuted] = useState<boolean>(() => localStorage.getItem("avatar.muted") === "true");
-  const [voiceMode, setVoiceMode] = useState<"text" | "voice">(() => ((localStorage.getItem("avatar.voiceMode") as any) || "text"));
+  const [open, setOpen] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.open") ? localStorage.getItem("avatar.open") === "true" : true));
+  const [muted, setMuted] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.muted") === "true"));
+  const [voiceMode, setVoiceMode] = useState<"text" | "voice">(() => ((typeof window !== "undefined" && (localStorage.getItem("avatar.voiceMode") as any)) || "text"));
   const [input, setInput] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [typing, setTyping] = useState<boolean>(false);
@@ -153,7 +153,7 @@ export default function AvatarWidgetFuturistic() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [mockMode] = useState<boolean>(!API_URL);
-  const [selectedMascot, setSelectedMascot] = useState<string>(() => localStorage.getItem("avatar.mascot") || MASCOTS[0].id);
+  const [selectedMascot, setSelectedMascot] = useState<string>(() => (typeof window !== "undefined" ? localStorage.getItem("avatar.mascot") || MASCOTS[0].id : MASCOTS[0].id));
   const [expression, setExpression] = useState<string>("neutral");
   const [listening, setListening] = useState<boolean>(false);
 
@@ -164,16 +164,16 @@ export default function AvatarWidgetFuturistic() {
   const idCounter = useRef<number>(1);
 
   useEffect(() => {
-    localStorage.setItem("avatar.mascot", selectedMascot);
+    if (typeof window !== "undefined") localStorage.setItem("avatar.mascot", selectedMascot);
   }, [selectedMascot]);
   useEffect(() => {
-    localStorage.setItem("avatar.open", open ? "true" : "false");
+    if (typeof window !== "undefined") localStorage.setItem("avatar.open", open ? "true" : "false");
   }, [open]);
   useEffect(() => {
-    localStorage.setItem("avatar.muted", muted ? "true" : "false");
+    if (typeof window !== "undefined") localStorage.setItem("avatar.muted", muted ? "true" : "false");
   }, [muted]);
   useEffect(() => {
-    localStorage.setItem("avatar.voiceMode", voiceMode);
+    if (typeof window !== "undefined") localStorage.setItem("avatar.voiceMode", voiceMode);
   }, [voiceMode]);
 
   useEffect(() => {
@@ -207,6 +207,7 @@ export default function AvatarWidgetFuturistic() {
 
   /* ---------- speech recognition (voice input) ---------- */
   const startListening = () => {
+    if (typeof window === "undefined") return;
     if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
       alert("Speech recognition not supported in this browser. Try Chrome.");
       return;
@@ -219,6 +220,7 @@ export default function AvatarWidgetFuturistic() {
     rec.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript;
       setInput(transcript);
+      // call handler
       handleSend(transcript);
     };
     rec.onerror = (e: any) => {
@@ -332,7 +334,7 @@ export default function AvatarWidgetFuturistic() {
 
   /* ---------- unified send handler (type or speak) ---------- */
   async function handleSend(textOverride?: string) {
-    const text = (textOverride ?? input || "").trim();
+    const text = ((textOverride ?? input) || "").trim();
     if (!text) return;
     const userMsg: Message = { id: `u-${Date.now()}`, text, sender: "user", time: new Date().toISOString() };
     pushMessage(userMsg);
