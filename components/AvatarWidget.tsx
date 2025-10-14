@@ -2,130 +2,37 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Bot,
-  Mic,
-  Volume2,
-  Send,
-  Maximize2,
-  ShoppingCart,
-  Settings,
-  Upload,
-  Slash,
-} from "lucide-react";
+import { Mic, Keyboard, Send, Volume2, Slash, X } from "lucide-react";
 
 /**
- * AvatarWidget.tsx
- * - Full-featured futuristic mascot assistant
- * - Replace components/AvatarWidget.tsx with this file content
+ * AvatarWidget - Voice-first mascot UI with:
+ * - Floating mascot that listens & speaks
+ * - Chat modal (full history + composer) opened by keyboard icon
+ * - Listening visual (animated rings/waveform) while speech recognition active
  *
- * Notes:
- * - Requires framer-motion and lucide-react (you already use these)
- * - Uses NEXT_PUBLIC_API_URL and NEXT_PUBLIC_API_KEY for real backend (if provided)
- * - If no API_URL, runs in MOCK mode
+ * Replace components/AvatarWidget.tsx with this file.
  */
 
 /* ---------- types ---------- */
-type Product = {
-  id: number;
-  title: string;
-  price: string;
-  handle?: string;
-  variant_id?: number;
-  checkoutUrl?: string;
-};
-
-type Message = {
-  id: string;
-  text: string;
-  sender: "user" | "assistant";
-  time: string;
-  type?: "general" | "store";
-  audioUrl?: string;
-};
+type Product = { id: number; title: string; price: string; handle?: string; variant_id?: number; checkoutUrl?: string; };
+type Message = { id: string; text: string; sender: "user" | "assistant"; time: string; audioUrl?: string; };
 
 /* ---------- env / constants ---------- */
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 const SHOP = process.env.NEXT_PUBLIC_SHOP || "demo-shop.myshopify.com";
 
-/* ---------- mascots (5) ---------- */
+/* ---------- mascots ---------- */
 const MASCOTS = [
-  {
-    id: "sunny",
-    name: "Sunny",
-    mouthAnchor: { x: 0.53, y: 0.62 },
-    svg: (props: any) => (
-      <svg viewBox="0 0 96 96" {...props}>
-        <defs>
-          <linearGradient id="g1" x1="0" x2="1">
-            <stop offset="0%" stopColor="#FDE68A" />
-            <stop offset="100%" stopColor="#FCA5A5" />
-          </linearGradient>
-        </defs>
-        <circle cx="48" cy="44" r="34" fill="url(#g1)" stroke="#F97316" strokeWidth="2" />
-        <ellipse cx="36" cy="40" rx="3" ry="3" fill="#111827" />
-        <ellipse cx="60" cy="40" rx="3" ry="3" fill="#111827" />
-        <path d="M30 60 Q48 68 66 60" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "bubbles",
-    name: "Bubbles",
-    mouthAnchor: { x: 0.5, y: 0.66 },
-    svg: (props: any) => (
-      <svg viewBox="0 0 96 96" {...props}>
-        <circle cx="48" cy="42" r="34" fill="#A7F3D0" stroke="#10B981" strokeWidth="2" />
-        <rect x="28" y="36" rx="3" width="12" height="6" fill="#111827" />
-        <rect x="56" y="36" rx="3" width="6" height="6" fill="#111827" />
-        <path d="M34 68 Q48 62 62 68" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "pixel",
-    name: "Pixel",
-    mouthAnchor: { x: 0.5, y: 0.6 },
-    svg: (props: any) => (
-      <svg viewBox="0 0 96 96" {...props}>
-        <rect x="12" y="14" width="72" height="72" rx="14" fill="#E0E7FF" stroke="#4338CA" strokeWidth="2" />
-        <circle cx="36" cy="44" r="3" fill="#111827" />
-        <circle cx="60" cy="44" r="3" fill="#111827" />
-        <path d="M30 64 Q48 70 66 64" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "flare",
-    name: "Flare",
-    mouthAnchor: { x: 0.55, y: 0.62 },
-    svg: (props: any) => (
-      <svg viewBox="0 0 96 96" {...props}>
-        <polygon points="48,10 76,40 60,80 36,80 20,40" fill="#FFE4E6" stroke="#FB7185" strokeWidth="2" />
-        <circle cx="36" cy="44" r="3" fill="#111827" />
-        <circle cx="60" cy="44" r="3" fill="#111827" />
-        <path d="M32 66 Q48 72 64 66" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "orbit",
-    name: "Orbit",
-    mouthAnchor: { x: 0.5, y: 0.63 },
-    svg: (props: any) => (
-      <svg viewBox="0 0 96 96" {...props}>
-        <circle cx="48" cy="44" r="34" fill="#DBEAFE" stroke="#3B82F6" strokeWidth="2" />
-        <ellipse cx="36" cy="40" rx="3" ry="3" fill="#111827" />
-        <ellipse cx="60" cy="40" rx="3" ry="3" fill="#111827" />
-        <path d="M38 68 Q48 60 58 68" stroke="#111827" strokeWidth="3" fill="none" strokeLinecap="round" />
-      </svg>
-    ),
-  },
+  { id: "sunny", name: "Sunny", mouthAnchor: { x: 0.5, y: 0.64 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="44" r="34" fill="#FFD580"/><circle cx="36" cy="40" r="3" fill="#111"/><circle cx="60" cy="40" r="3" fill="#111"/><path d="M30 60 Q48 68 66 60" stroke="#111" strokeWidth="3" fill="none" strokeLinecap="round"/></svg>)},
+  { id: "bubbles", name: "Bubbles", mouthAnchor: { x: 0.5, y: 0.66 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="42" r="34" fill="#A7F3D0"/><rect x="28" y="36" rx="3" width="12" height="6" fill="#111"/><rect x="56" y="36" rx="3" width="6" height="6" fill="#111"/><path d="M34 68 Q48 62 62 68" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
+  { id: "pixel", name: "Pixel", mouthAnchor: { x: 0.5, y: 0.6 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><rect x="12" y="14" width="72" height="72" rx="14" fill="#E0E7FF"/><circle cx="36" cy="44" r="3" fill="#111"/><circle cx="60" cy="44" r="3" fill="#111"/><path d="M30 64 Q48 70 66 64" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
+  { id: "flare", name: "Flare", mouthAnchor: { x: 0.55, y: 0.62 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><polygon points="48,10 76,40 60,80 36,80 20,40" fill="#FFE4E6"/><circle cx="36" cy="44" r="3" fill="#111"/><circle cx="60" cy="44" r="3" fill="#111"/><path d="M32 66 Q48 72 64 66" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
+  { id: "orbit", name: "Orbit", mouthAnchor: { x: 0.5, y: 0.63 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="44" r="34" fill="#DBEAFE"/><ellipse cx="36" cy="40" rx="3" ry="3" fill="#111"/><ellipse cx="60" cy="40" rx="3" ry="3" fill="#111"/><path d="M38 68 Q48 60 58 68" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
 ];
 
-/* ---------- utility: speak TTS ---------- */
-function speakText(text: string | undefined, lang = "en-US") {
+/* ---------- utils ---------- */
+function speakText(text?: string, lang = "en-US") {
   if (!text) return false;
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     try {
@@ -142,472 +49,346 @@ function speakText(text: string | undefined, lang = "en-US") {
 }
 
 /* ---------- component ---------- */
-export default function AvatarWidgetFuturistic() {
-  const [open, setOpen] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.open") ? localStorage.getItem("avatar.open") === "true" : true));
-  const [muted, setMuted] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.muted") === "true"));
-  const [voiceMode, setVoiceMode] = useState<"text" | "voice">(() => ((typeof window !== "undefined" && (localStorage.getItem("avatar.voiceMode") as any)) || "text"));
-  const [input, setInput] = useState<string>("");
+export default function AvatarWidget() {
+  // UI state
+  const [selectedMascot, setSelectedMascot] = useState<string>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.mascot")) || "sunny");
+  const [muted, setMuted] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.muted") === "true") || false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [typing, setTyping] = useState<boolean>(false);
-  const [recommended, setRecommended] = useState<Product[]>([]);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [mockMode] = useState<boolean>(!API_URL);
-  const [selectedMascot, setSelectedMascot] = useState<string>(() => (typeof window !== "undefined" ? localStorage.getItem("avatar.mascot") || MASCOTS[0].id : MASCOTS[0].id));
-  const [expression, setExpression] = useState<string>("neutral");
   const [listening, setListening] = useState<boolean>(false);
+  const [chatModalOpen, setChatModalOpen] = useState<boolean>(false);
+  const [composerText, setComposerText] = useState<string>("");
+  const [lastAssistantText, setLastAssistantText] = useState<string | null>(null);
+  const [lastAssistantAudio, setLastAssistantAudio] = useState<string | null>(null);
+  const [recommended, setRecommended] = useState<Product[]>([]);
+  const [mockMode] = useState<boolean>(() => !API_URL);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const avatarWrapRef = useRef<HTMLDivElement | null>(null);
+  // refs
+  const avatarRef = useRef<HTMLDivElement | null>(null);
   const speechRecRef = useRef<any>(null);
-  const idCounter = useRef<number>(1);
+  const mounted = useRef(false);
 
+  // persist selection + muted
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("avatar.mascot", selectedMascot);
   }, [selectedMascot]);
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("avatar.open", open ? "true" : "false");
-  }, [open]);
-  useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("avatar.muted", muted ? "true" : "false");
   }, [muted]);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("avatar.voiceMode", voiceMode);
-  }, [voiceMode]);
 
+  // initial greeting
   useEffect(() => {
-    // initial greeting
-    const welcome: Message = {
-      id: `m-${Date.now()}`,
-      text: "Hello — I’m your AI shopping avatar. Ask me anything about the store.",
-      sender: "assistant",
-      time: new Date().toISOString(),
-      type: "general",
-    };
-    setMessages([welcome]);
-  }, []);
+    if (mounted.current) return;
+    mounted.current = true;
+    const greeting = "Hello — tap me to speak, or open the keyboard to type.";
+    pushMessage({ id: `m-${Date.now()}`, text: greeting, sender: "assistant", time: new Date().toISOString() });
+    setLastAssistantText(greeting);
+    if (!muted) speakText(greeting);
+  }, []); // eslint-disable-line
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing, recommended, videoUrl]);
-
-  /* ---------- helpers ---------- */
-  function pushMessage(msg: Message) {
-    setMessages((p) => [...p, msg]);
+  // helper to push message
+  function pushMessage(m: Message) {
+    setMessages((s) => [...s, m]);
   }
 
-  function decideExpressionFromText(text: string) {
-    const t = (text || "").toLowerCase();
-    if (/\b(thank|great|nice|love|awesome|good|yay)\b/.test(t)) return "happy";
-    if (/\b(error|not work|fail|problem|sorry|can't)\b/.test(t)) return "sad";
-    if (/\b(wait|hold|loading|thinking|processing)\b/.test(t)) return "thinking";
-    return "neutral";
+  // compute mouth position
+  function getMouthPos() {
+    const m = MASCOTS.find((x) => x.id === selectedMascot) || MASCOTS[0];
+    const anchor = m.mouthAnchor || { x: 0.5, y: 0.6 };
+    const el = avatarRef.current;
+    if (!el) return { left: 48, top: 28 };
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left + rect.width * anchor.x, top: rect.top + rect.height * anchor.y };
   }
 
   /* ---------- speech recognition (voice input) ---------- */
   const startListening = () => {
     if (typeof window === "undefined") return;
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      alert("Speech recognition not supported in this browser. Try Chrome.");
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition not supported in this browser. Use Chrome or Edge.");
       return;
     }
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const rec = new SpeechRecognition();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => {
-      const transcript = e.results[0][0].transcript;
-      setInput(transcript);
-      // call handler
-      handleSend(transcript);
-    };
-    rec.onerror = (e: any) => {
-      console.error("Speech rec error", e);
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    rec.start();
-    setListening(true);
-    speechRecRef.current = rec;
+    try {
+      const rec = new SpeechRecognition();
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = async (e: any) => {
+        const transcript = e.results[0][0].transcript;
+        pushMessage({ id: `u-${Date.now()}`, text: transcript, sender: "user", time: new Date().toISOString() });
+        await handleSend(transcript);
+      };
+      rec.onerror = (err: any) => {
+        console.error("Speech error", err);
+        setListening(false);
+      };
+      rec.onend = () => setListening(false);
+      rec.start();
+      speechRecRef.current = rec;
+      setListening(true);
+    } catch (e) {
+      console.error("startListening failed", e);
+    }
   };
 
   const stopListening = () => {
-    if (speechRecRef.current) {
-      try {
-        speechRecRef.current.stop();
-      } catch (e) {}
-      speechRecRef.current = null;
-    }
+    try {
+      if (speechRecRef.current) speechRecRef.current.stop();
+    } catch (e) {}
+    speechRecRef.current = null;
     setListening(false);
   };
 
-  /* ---------- mock reply (if no backend) ---------- */
-  async function mockReply(userText: string) {
-    setTyping(true);
-    await new Promise((r) => setTimeout(r, 700 + Math.random() * 700));
-    const lower = userText.toLowerCase();
-    let reply = "I can help with products, shipping, returns, and personalized suggestions. What do you want?";
-    let prods: Product[] = [];
-    if (lower.includes("headphone") || lower.includes("headset")) {
-      reply = "Our Premium Wireless Headphones have active noise-cancellation and 30hr battery life.";
-      prods = [{ id: 1, title: "Premium Wireless Headphones", price: "$129.99", handle: "wireless-headphones", variant_id: 111 }];
-    } else if (lower.includes("fitness") || lower.includes("tracker")) {
-      reply = "The Smart Fitness Tracker monitors heart rate, steps, and sleep — great for daily fitness.";
-      prods = [{ id: 2, title: "Smart Fitness Tracker", price: "$89.99", handle: "fitness-tracker", variant_id: 222 }];
-    } else {
-      const variants = [
-        "Nice choice — I can find the perfect match for your needs.",
-        "On it — scanning the shop for best options.",
-        "Hmm — I have a few recommendations coming right up.",
-      ];
-      reply = variants[Math.floor(Math.random() * variants.length)];
-      prods = [
-        { id: 1, title: "Premium Wireless Headphones", price: "$129.99", handle: "wireless-headphones", variant_id: 111 },
-        { id: 3, title: "Portable Bluetooth Speaker", price: "$79.99", handle: "bluetooth-speaker", variant_id: 333 },
-      ].slice(0, 2);
-    }
-
-    const assistantMsg: Message = { id: `m-${Date.now()}`, text: reply, sender: "assistant", time: new Date().toISOString(), type: "store" };
-    pushMessage(assistantMsg);
-    setRecommended(prods);
-    setTyping(false);
-
-    const expr = decideExpressionFromText(reply);
-    setExpression(expr);
-
-    // voice play (TTS)
-    if (voiceMode === "voice" && !muted) {
-      speakText(reply, "en-US");
-    }
-
-    // no mock video by default
-    setVideoUrl(null);
-  }
-
-  /* ---------- backend call ---------- */
-  async function callBackend(shop: string, message: string) {
-    setTyping(true);
+  /* ---------- backend or mock ---------- */
+  async function callBackend(message: string) {
+    if (mockMode) return await mockReply(message);
     try {
-      const history = messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text }));
-      const payload = { shop, message, history };
-      const resp = await fetch(API_URL, {
+      const payload = { shop: SHOP, message, history: messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })) };
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(API_KEY ? { "x-api-key": API_KEY } : {}) },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => "error");
-        throw new Error(text);
+      if (!res.ok) {
+        const t = await res.text().catch(() => "error");
+        throw new Error(t);
       }
-      const data = await resp.json();
-      const assistantText: string = data.text || "No response";
-      const assistantMsg: Message = { id: `m-${Date.now()}`, text: assistantText, sender: "assistant", time: new Date().toISOString(), audioUrl: data.speech_url || undefined };
-      pushMessage(assistantMsg);
-
+      const data = await res.json();
+      const answer = data.text || "I don't have an answer right now.";
+      pushMessage({ id: `m-${Date.now()}`, text: answer, sender: "assistant", time: new Date().toISOString(), audioUrl: data.speech_url || undefined });
+      setLastAssistantText(answer);
+      setLastAssistantAudio(data.speech_url || null);
       setRecommended(data.recommended_products || []);
-      setVideoUrl(data.avatar_video_url || null);
-
-      const expr = data.expression || decideExpressionFromText(assistantText);
-      setExpression(expr);
-
-      // play audio: prefer backend speech_url, else fallback to TTS
-      if (voiceMode === "voice" && !muted) {
+      // speak
+      if (!muted) {
         if (data.speech_url) {
-          const audio = new Audio(data.speech_url);
-          audio.play().catch(() => {
-            speakText(assistantText);
-          });
+          const a = new Audio(data.speech_url);
+          a.play().catch(() => speakText(answer));
         } else {
-          speakText(assistantText);
+          speakText(answer);
         }
       }
+      return;
     } catch (err) {
-      console.error("backend error", err);
-      const assistantMsg: Message = { id: `m-${Date.now()}`, text: "Sorry, I couldn't reach the server.", sender: "assistant", time: new Date().toISOString() };
-      pushMessage(assistantMsg);
-    } finally {
-      setTyping(false);
+      console.error("callBackend error", err);
+      pushMessage({ id: `m-${Date.now()}`, text: "Sorry — couldn't reach server.", sender: "assistant", time: new Date().toISOString() });
+      setLastAssistantText("Sorry — couldn't reach server.");
+      if (!muted) speakText("Sorry — couldn't reach server.");
     }
   }
 
-  /* ---------- unified send handler (type or speak) ---------- */
+  // mock reply
+  async function mockReply(message: string) {
+    await new Promise((r) => setTimeout(r, 600 + Math.random() * 700));
+    const lower = message.toLowerCase();
+    let reply = "Got it — I have a few recommendations coming right up.";
+    let prods: Product[] = [];
+    if (lower.includes("headphone")) {
+      reply = "Our Premium Wireless Headphones are a top pick.";
+      prods = [{ id: 1, title: "Premium Wireless Headphones", price: "$129.99", handle: "wireless-headphones", variant_id: 111 }];
+    } else if (lower.includes("fitness")) {
+      reply = "Check the Smart Fitness Tracker with long battery life.";
+      prods = [{ id: 2, title: "Smart Fitness Tracker", price: "$89.99", handle: "fitness-tracker", variant_id: 222 }];
+    }
+    pushMessage({ id: `m-${Date.now()}`, text: reply, sender: "assistant", time: new Date().toISOString() });
+    setLastAssistantText(reply);
+    setLastAssistantAudio(null);
+    setRecommended(prods);
+    if (!muted) speakText(reply);
+  }
+
+  // unified send handler
   async function handleSend(textOverride?: string) {
-    const text = ((textOverride ?? input) || "").trim();
+    const text = ((textOverride ?? "") || "").trim();
     if (!text) return;
-    const userMsg: Message = { id: `u-${Date.now()}`, text, sender: "user", time: new Date().toISOString() };
-    pushMessage(userMsg);
-    setInput("");
-    setRecommended([]);
-    setExpression("listening");
-
-    if (mockMode) {
-      await mockReply(text);
-    } else {
-      await callBackend(SHOP, text);
+    // user message already pushed by voice flow; if typing from modal push here
+    if (!messages.some((m) => m.sender === "user" && m.text === text)) {
+      pushMessage({ id: `u-${Date.now()}`, text, sender: "user", time: new Date().toISOString() });
     }
+    setComposerText("");
+    setChatModalOpen(false);
+    await callBackend(text);
   }
 
-  /* ---------- avatar upload preview ---------- */
-  function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
-    setAvatarPreview(url);
-  }
-
-  /* ---------- add to cart ---------- */
+  // add to cart stub
   function handleAddToCart(p: Product) {
-    // For demo: show message and optionally redirect or call your proxy
-    pushMessage({ id: `c-${Date.now()}`, text: `${p.title} has been added to your cart.`, sender: "assistant", time: new Date().toISOString(), type: "store" });
-    // Real implementation: call /api/shopify-add-to-cart serverless to create checkout or add to cart
-    // fetch('/api/shopify-add-to-cart', { method: 'POST', body: JSON.stringify({ variantId: p.variant_id, qty:1 }) })
+    pushMessage({ id: `c-${Date.now()}`, text: `${p.title} added to cart.`, sender: "assistant", time: new Date().toISOString() });
+    // implement server-side call to add to cart in production
   }
 
-  /* ---------- compute mouth position for speech bubble ---------- */
-  function getMouthPosition() {
-    const m = MASCOTS.find((x) => x.id === selectedMascot);
-    const anchor = m?.mouthAnchor || { x: 0.5, y: 0.6 };
-    const el = avatarWrapRef.current;
-    if (!el) return { left: 60, top: 8 };
-    const rect = el.getBoundingClientRect();
-    const left = rect.width * anchor.x;
-    const top = rect.height * anchor.y;
-    return { left, top };
-  }
-
-  /* ---------- small UI helpers ---------- */
+  // selected mascot and mouth position
   const selected = MASCOTS.find((m) => m.id === selectedMascot) || MASCOTS[0];
-  const mouthPos = getMouthPosition();
+  const mouthPos = (() => {
+    const el = avatarRef.current;
+    if (!el) return { right: 24 + 92 + 12, bottom: 24 + 40 };
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left + rect.width * (selected.mouthAnchor.x || 0.5), top: rect.top + rect.height * (selected.mouthAnchor.y || 0.6) };
+  })();
 
-  /* ---------- render ---------- */
   return (
     <>
-      <AnimatePresence>
-        {/* Minimized bubble */}
-        {!open && (
+      {/* Floating mascot + keyboard */}
+      <div style={{ position: "fixed", right: 24, bottom: 24, zIndex: 9999, display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          onClick={() => setChatModalOpen(true)}
+          title="Open chat"
+          style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,0.95)", boxShadow: "0 6px 18px rgba(2,6,23,0.12)", border: "none", cursor: "pointer" }}
+        >
+          <Keyboard />
+        </button>
+
+        <div style={{ position: "relative", width: 92, height: 92 }}>
+          {/* listening visual (rings/wave) */}
+          <AnimatePresence>
+            {listening && (
+              <motion.div
+                key="rings"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ position: "absolute", left: -8, top: -8, width: 108, height: 108, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}
+              >
+                <div style={{ position: "relative", width: 96, height: 96 }}>
+                  <div className="ring ring-1" />
+                  <div className="ring ring-2" />
+                  <div className="ring ring-3" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.button
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0 }}
-            onClick={() => setOpen(true)}
-            className="fut-bubble"
-            aria-label="Open assistant"
-            title="Open assistant"
-            style={{ position: "fixed", right: 24, bottom: 24, zIndex: 9999 }}
+            ref={avatarRef}
+            onClick={() => {
+              if (listening) stopListening();
+              else startListening();
+            }}
+            whileTap={{ scale: 0.96 }}
+            whileHover={{ scale: 1.03 }}
+            style={{ width: 92, height: 92, borderRadius: 20, background: "linear-gradient(135deg,#7c3aed,#06b6d4)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 30px rgba(0,0,0,0.25)", cursor: "pointer" }}
+            title={listening ? "Listening... click to stop" : "Click to speak"}
           >
-            <div className="fut-bubble-inner">
-              <div className="avatar-ring">
-                <div style={{ width: 44, height: 44 }}>{selected.svg({ width: 44, height: 44 })}</div>
-              </div>
-              <div className="pulse-dot" />
+            <div style={{ width: 72, height: 72, borderRadius: 16, background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 64, height: 64 }}>{selected.svg({ width: 64, height: 64 })}</div>
             </div>
           </motion.button>
-        )}
 
-        {/* Full panel */}
-        {open && (
+          {/* mute badge */}
+          <div style={{ position: "absolute", right: -6, bottom: -6 }}>
+            <button onClick={() => setMuted((s) => !s)} title={muted ? "Unmute" : "Mute"} style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: "#fff", boxShadow: "0 6px 14px rgba(2,6,23,0.12)", cursor: "pointer" }}>
+              {muted ? <Slash /> : <Volume2 />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Assistant speech bubble (near mascot) */}
+      <AnimatePresence>
+        {lastAssistantText && (
           <motion.div
-            initial={{ y: 40, opacity: 0, scale: 0.98 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0 }}
-            className="fut-panel"
-            role="dialog"
-            aria-label="Shopping assistant"
+            key="assist-bubble"
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
             style={{
               position: "fixed",
-              right: 24,
-              bottom: 24,
-              zIndex: 9999,
-              width: 420,
-              borderRadius: 18,
-              boxShadow: "0 10px 30px rgba(2,6,23,0.35)",
-              overflow: "hidden",
-              display: "flex",
-              background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.96))",
+              right: 24 + 92 + 12,
+              bottom: 24 + 40,
+              zIndex: 9998,
+              width: 300,
             }}
           >
-            {/* Left: avatar stage */}
-            <div style={{ width: 160, padding: 12, borderRight: "1px solid rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div ref={avatarWrapRef} style={{ width: 64, height: 64, borderRadius: 14, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#eef2ff, #fff)" }}>
-                    {avatarPreview ? <img src={avatarPreview} alt="avatar" style={{ width: 64, height: 64, objectFit: "cover" }} /> : selected.svg({ width: 64, height: 64 })}
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>AcademicTechnexus</div>
+            <div style={{ background: "linear-gradient(180deg,#ffffff,#f8fafc)", padding: 12, borderRadius: 12, boxShadow: "0 10px 30px rgba(2,6,23,0.15)", fontSize: 14 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Moxi</div>
+              <div style={{ color: "#0f172a" }}>{lastAssistantText}</div>
+              {lastAssistantAudio && (
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={() => { const a = new Audio(lastAssistantAudio); a.play().catch(()=>{}); }} style={{ padding: "6px 10px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff" }}>Play audio</button>
                 </div>
-
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button className={`icon-btn ${muted ? "muted" : ""}`} onClick={() => setMuted((s) => !s)} title={muted ? "Unmute" : "Mute"}>
-                    {muted ? <Slash /> : <Volume2 />}
-                  </button>
-                  <label style={{ display: "inline-block" }} title="Upload avatar">
-                    <input onChange={handleAvatarUpload} accept="image/*" type="file" style={{ display: "none" }} />
-                    <button className="icon-btn" title="Upload avatar"><Upload /></button>
-                  </label>
-                  <button className="icon-btn" onClick={() => setOpen(false)} title="Minimize"><Maximize2 /></button>
-                </div>
-              </div>
-
-              {/* avatar stage / video */}
-              <div ref={stageRef} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                {videoUrl ? (
-                  <video src={videoUrl} autoPlay playsInline muted={muted} style={{ width: "100%", borderRadius: 12 }} />
-                ) : (
-                  <motion.div
-                    animate={expression === "happy" ? { rotate: [0, 6, -6, 0] } : expression === "thinking" ? { scale: [1, 0.98, 1] } : { rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 80, damping: 10 }}
-                    style={{ width: 96, height: 96, display: "flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    {selected.svg({ width: 96, height: 96 })}
-                  </motion.div>
-                )}
-
-                {/* speech bubble from mouth for last assistant message */}
-                <AnimatePresence>
-                  {messages.length > 0 && messages[messages.length - 1].sender === "assistant" && (
-                    <motion.div
-                      key={`bubble-${messages[messages.length - 1].id}`}
-                      initial={{ opacity: 0, y: 8, scale: 0.85 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.85 }}
-                      style={{
-                        position: "absolute",
-                        left: mouthPos.left - 80,
-                        top: mouthPos.top - 40,
-                        width: 160,
-                        pointerEvents: "auto",
-                      }}
-                    >
-                      <div style={{ background: "white", padding: "8px 10px", borderRadius: 14, boxShadow: "0 6px 18px rgba(2,6,23,0.15)", fontSize: 13 }}>
-                        {messages[messages.length - 1].text}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>Mascot</div>
-                <select value={selectedMascot} onChange={(e) => setSelectedMascot(e.target.value)} style={{ padding: "6px 8px", borderRadius: 8 }}>
-                  {MASCOTS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
+              )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Right: chat & composer */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 360 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>Shopping Assistant</h3>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>How can I help today?</div>
+      {/* Chat modal (full conversation + composer) */}
+      <AnimatePresence>
+        {chatModalOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            style={{ position: "fixed", right: 24, bottom: 140, zIndex: 10000 }}
+          >
+            <div style={{ width: 420, borderRadius: 12, boxShadow: "0 12px 38px rgba(2,6,23,0.28)", overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: 12, borderBottom: "1px solid rgba(0,0,0,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>{selected.svg({ width: 32, height: 32 })}</div>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>Chat with Moxi</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>Voice-first assistant — type or speak</div>
+                  </div>
                 </div>
-
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => setVoiceMode("text")} className={`small-btn ${voiceMode === "text" ? "active" : ""}`} style={{ padding: "6px 8px", borderRadius: 8 }}>Text</button>
-                  <button onClick={() => setVoiceMode("voice")} className={`small-btn ${voiceMode === "voice" ? "active" : ""}`} style={{ padding: "6px 8px", borderRadius: 8 }}>Voice</button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select value={selectedMascot} onChange={(e) => setSelectedMascot(e.target.value)} style={{ padding: "6px 8px", borderRadius: 8 }}>
+                    {MASCOTS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  <button onClick={() => setChatModalOpen(false)} style={{ border: "none", background: "transparent", cursor: "pointer" }}><X /></button>
                 </div>
               </div>
 
-              <div style={{ padding: 12, flex: 1, display: "flex", gap: 12 }}>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                  <div className="messages-scroll" style={{ overflow: "auto", paddingRight: 8 }}>
-                    {messages.map((m) => (
-                      <div key={m.id} style={{ display: "flex", marginBottom: 10, alignItems: "flex-end", gap: 8, justifyContent: m.sender === "user" ? "flex-end" : "flex-start" }}>
-                        {m.sender === "assistant" && <div style={{ width: 8 }} />}
-                        <div style={{ maxWidth: "78%", textAlign: m.sender === "user" ? "right" : "left" }}>
-                          <div style={{
-                            display: "inline-block",
-                            background: m.sender === "user" ? "#3730a3" : "#fff",
-                            color: m.sender === "user" ? "#fff" : "#0f172a",
-                            padding: "8px 10px",
-                            borderRadius: 12,
-                            boxShadow: "0 6px 16px rgba(2,6,23,0.06)"
-                          }}>
-                            <div style={{ fontSize: 13 }}>{m.text}</div>
-                          </div>
-                          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>{new Date(m.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, width: "100%" }}>
+                <div style={{ overflow: "auto", maxHeight: 220 }}>
+                  {messages.map((m) => (
+                    <div key={m.id} style={{ display: "flex", justifyContent: m.sender === "user" ? "flex-end" : "flex-start", padding: "6px 0" }}>
+                      <div style={{ maxWidth: "78%" }}>
+                        <div style={{
+                          display: "inline-block",
+                          background: m.sender === "user" ? "#4f46e5" : "#fff",
+                          color: m.sender === "user" ? "#fff" : "#0f172a",
+                          padding: "8px 10px",
+                          borderRadius: 12,
+                          boxShadow: "0 6px 16px rgba(2,6,23,0.06)"
+                        }}>
+                          <div style={{ fontSize: 13 }}>{m.text}</div>
                         </div>
-                      </div>
-                    ))}
-
-                    {typing && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                        <div style={{ width: 8 }} />
-                        <div style={{ display: "inline-block", background: "#fff", padding: "8px 10px", borderRadius: 12 }}>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <div className="dot" style={{ width: 6, height: 6, borderRadius: "999px", background: "#cbd5e1", animation: "pulse 1s infinite" }} />
-                            <div className="dot" style={{ width: 6, height: 6, borderRadius: "999px", background: "#cbd5e1", animation: "pulse 1s infinite", animationDelay: "0.12s" }} />
-                            <div className="dot" style={{ width: 6, height: 6, borderRadius: "999px", background: "#cbd5e1", animation: "pulse 1s infinite", animationDelay: "0.24s" }} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* recommended */}
-                  {recommended.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Recommended for you</div>
-                      <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                        {recommended.map((p) => (
-                          <div key={p.id} style={{ minWidth: 180, background: "#fff", borderRadius: 10, padding: 8, boxShadow: "0 6px 18px rgba(2,6,23,0.06)" }}>
-                            <div style={{ height: 72, background: "#f3f4f6", borderRadius: 8, marginBottom: 8 }} />
-                            <div style={{ fontWeight: 600 }}>{p.title}</div>
-                            <div style={{ color: "#6b7280", marginBottom: 8 }}>{p.price}</div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button className="outline-btn" onClick={() => (window.location.href = `/products/${p.handle}`)}>View</button>
-                              <button className="primary-btn" onClick={() => handleAddToCart(p)} style={{ display: "flex", alignItems: "center", gap: 6 }}><ShoppingCart size={14} />Add</button>
-                            </div>
-                          </div>
-                        ))}
+                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>{new Date(m.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
                       </div>
                     </div>
-                  )}
-
+                  ))}
                 </div>
-              </div>
 
-              {/* composer */}
-              <div style={{ padding: 12, borderTop: "1px solid rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", gap: 8 }}>
+                {/* recommended */}
+                {recommended.length > 0 && (
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Recommended for you</div>
+                    <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                      {recommended.map((p) => (
+                        <div key={p.id} style={{ minWidth: 160, background: "#f8fafc", padding: 8, borderRadius: 8 }}>
+                          <div style={{ fontWeight: 600 }}>{p.title}</div>
+                          <div style={{ color: "#6b7280", marginBottom: 8 }}>{p.price}</div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => (window.location.href = `/products/${p.handle}`)} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.06)", background: "#fff" }}>View</button>
+                            <button onClick={() => handleAddToCart(p)} style={{ padding: "6px 8px", borderRadius: 8, border: "none", background: "#4f46e5", color: "#fff" }}>Add</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* composer */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
-                    placeholder="Ask about products, shipping, orders, or say 'recommend'..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
+                    placeholder="Type your message or press Send..."
+                    value={composerText}
+                    onChange={(e) => setComposerText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSend(composerText); }}
                     style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.06)" }}
                   />
-                  <button
-                    onClick={() => {
-                      if (voiceMode === "voice") {
-                        if (listening) stopListening();
-                        else startListening();
-                      } else {
-                        // if in text mode, toggle listening to voice input as convenience
-                        if (!listening) startListening();
-                        else stopListening();
-                      }
-                    }}
-                    title="Speak"
-                    style={{ padding: "10px 12px", borderRadius: 10, background: listening ? "#ef4444" : "#fff", border: "1px solid rgba(0,0,0,0.06)" }}
-                  >
-                    <Mic />
-                  </button>
-                  <button onClick={() => handleSend()} style={{ padding: "10px 12px", borderRadius: 10, background: "#4f46e5", color: "white" }}>
+                  <button onClick={() => handleSend(composerText)} style={{ padding: "10px 12px", borderRadius: 10, background: "#4f46e5", color: "white", border: "none" }}>
                     <Send />
                   </button>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>Powered by AcademicTechnexus AI</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="ghost-btn" onClick={() => { setMessages([]); setRecommended([]); }}>Clear</button>
-                    <button className="ghost-btn" onClick={() => setAvatarPreview(null)}>Reset Avatar</button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -615,19 +396,27 @@ export default function AvatarWidgetFuturistic() {
         )}
       </AnimatePresence>
 
-      {/* small CSS tweaks (scoped) */}
+      {/* tiny scoped CSS */}
       <style jsx>{`
-        .icon-btn { background: transparent; border: none; padding: 8px; border-radius: 8px; cursor: pointer; }
-        .icon-btn.muted { opacity: 0.6; }
-        .fut-bubble { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 6px; background: linear-gradient(135deg,#7c3aed,#06b6d4); color: #fff; border: none; cursor: pointer; }
-        .fut-bubble .avatar-ring { width: 44px; height: 44px; border-radius: 999px; display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.12); }
-        .fut-panel { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-        .small-btn { border: 1px solid rgba(15,23,42,0.06); background: white; cursor: pointer; }
-        .small-btn.active { background: #eef2ff; border-color: #c7d2fe; }
-        .dot { display:inline-block; }
-        .outline-btn { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(15,23,42,0.06); background: white; cursor: pointer; }
-        .primary-btn { padding: 6px 8px; border-radius: 8px; border: none; background: #4f46e5; color: white; cursor: pointer; }
-        @keyframes pulse { 0% { opacity: 0.4; transform: translateY(0) } 50% { opacity: 1; transform: translateY(-4px) } 100% { opacity: 0.4; transform: translateY(0) } }
+        .ring {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%,-50%);
+          border-radius: 999px;
+          border: 2px solid rgba(99,102,241,0.12);
+          box-shadow: 0 12px 30px rgba(99,102,241,0.06);
+          animation: ringScale 1.8s infinite ease-in-out;
+        }
+        .ring-1 { width: 96px; height: 96px; animation-delay: 0s; }
+        .ring-2 { width: 72px; height: 72px; animation-delay: 0.2s; opacity: 0.85; }
+        .ring-3 { width: 48px; height: 48px; animation-delay: 0.4s; opacity: 0.6; }
+        @keyframes ringScale {
+          0% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.9; }
+          50% { transform: translate(-50%,-50%) scale(1.05); opacity: 0.6; }
+          100% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.3; }
+        }
+        button:focus { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); border-radius: 8px; }
       `}</style>
     </>
   );
