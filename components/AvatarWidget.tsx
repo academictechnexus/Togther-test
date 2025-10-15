@@ -1,403 +1,839 @@
-"use client";
-
 import React, { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Keyboard, Send, Volume2, Slash, X } from "lucide-react";
+import { motion, useAnimation } from "framer-motion";
+import {
+  Mic2,
+  Keyboard,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+  X as XIcon,
+} from "lucide-react";
 
 /**
- * AvatarWidget - Voice-first mascot UI with:
- * - Floating mascot that listens & speaks
- * - Chat modal (full history + composer) opened by keyboard icon
- * - Listening visual (animated rings) while speech recognition active
+ * AvatarWidget.tsx
  *
- * TypeScript-safe: avatarRef typed as HTMLButtonElement to avoid ref errors
+ * Enhanced "full-image" mascot widget:
+ * - Full-image/video mascots that can walk across the screen (animated with framer-motion).
+ * - Click mascot to start/stop listening (Web Speech API).
+ * - Plays backend-provided speech_url (audio) or falls back to browser TTS.
+ * - If avatar_video_url provided, shows lip-synced video overlay near mascot.
+ * - Keeps the chat modal, speech bubble, recommended products and mock mode behavior.
+ *
+ * Requirements:
+ * - framer-motion and lucide-react installed.
+ * - Provide high-quality assets (mp4/webm or png) and set their URLs in MASCOT_ASSETS below.
+ *
+ * NOTE: keep CSS/utility classes minimal — adapt to your Tailwind/design system.
  */
 
-/* ---------- types ---------- */
-type Product = { id: number; title: string; price: string; handle?: string; variant_id?: number; checkoutUrl?: string; };
-type Message = { id: string; text: string; sender: "user" | "assistant"; time: string; audioUrl?: string; };
+/* -------------------------
+   Configure mascot assets
+   -------------------------
+   Replace these URLs with your high-quality mascots.
+   Each entry may have:
+     - poster: static PNG used as fallback
+     - video: looping MP4/WebM used for walking/idle
+     - walkDistance: px to move across when doing "walk" animation
+*/
+const MASCOT_ASSETS = [
+  {
+    id: "mascot-1",
+    title: "Forest Walker",
+    poster: "/mascots/m1.png",
+    video: "/mascots/m1_walk.mp4", // optional
+    idleVideo: "/mascots/m1_idle.mp4",
+    walkDistance: 220,
+  },
+  {
+    id: "mascot-2",
+    title: "Robo Concierge",
+    poster: "/mascots/m2.png",
+    video: "/mascots/m2_walk.mp4",
+    idleVideo: "/mascots/m2_idle.mp4",
+    walkDistance: 260,
+  },
+  {
+    id: "mascot-3",
+    title: "Friendly Guide",
+    poster: "/mascots/m3.png",
+    video: "/mascots/m3_walk.mp4",
+    idleVideo: "/mascots/m3_idle.mp4",
+    walkDistance: 200,
+  },
+  {
+    id: "mascot-4",
+    title: "Pixel Pal",
+    poster: "/mascots/m4.png",
+    video: "/mascots/m4_walk.mp4",
+    idleVideo: "/mascots/m4_idle.mp4",
+    walkDistance: 240,
+  },
+  {
+    id: "mascot-5",
+    title: "Aurora",
+    poster: "/mascots/m5.png",
+    video: "/mascots/m5_walk.mp4",
+    idleVideo: "/mascots/m5_idle.mp4",
+    walkDistance: 210,
+  },
+] as const;
 
-/* ---------- env / constants ---------- */
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-const SHOP = process.env.NEXT_PUBLIC_SHOP || "demo-shop.myshopify.com";
+/* -------------------------
+   Types
+   -------------------------*/
+type MascotAsset = typeof MASCOT_ASSETS[number];
 
-/* ---------- mascots ---------- */
-const MASCOTS = [
-  { id: "sunny", name: "Sunny", mouthAnchor: { x: 0.5, y: 0.64 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="44" r="34" fill="#FFD580"/><circle cx="36" cy="40" r="3" fill="#111"/><circle cx="60" cy="40" r="3" fill="#111"/><path d="M30 60 Q48 68 66 60" stroke="#111" strokeWidth="3" fill="none" strokeLinecap="round"/></svg>)},
-  { id: "bubbles", name: "Bubbles", mouthAnchor: { x: 0.5, y: 0.66 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="42" r="34" fill="#A7F3D0"/><rect x="28" y="36" rx="3" width="12" height="6" fill="#111"/><rect x="56" y="36" rx="3" width="6" height="6" fill="#111"/><path d="M34 68 Q48 62 62 68" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
-  { id: "pixel", name: "Pixel", mouthAnchor: { x: 0.5, y: 0.6 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><rect x="12" y="14" width="72" height="72" rx="14" fill="#E0E7FF"/><circle cx="36" cy="44" r="3" fill="#111"/><circle cx="60" cy="44" r="3" fill="#111"/><path d="M30 64 Q48 70 66 64" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
-  { id: "flare", name: "Flare", mouthAnchor: { x: 0.55, y: 0.62 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><polygon points="48,10 76,40 60,80 36,80 20,40" fill="#FFE4E6"/><circle cx="36" cy="44" r="3" fill="#111"/><circle cx="60" cy="44" r="3" fill="#111"/><path d="M32 66 Q48 72 64 66" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
-  { id: "orbit", name: "Orbit", mouthAnchor: { x: 0.5, y: 0.63 }, svg: (p: any) => (<svg viewBox="0 0 96 96" {...p}><circle cx="48" cy="44" r="34" fill="#DBEAFE"/><ellipse cx="36" cy="40" rx="3" ry="3" fill="#111"/><ellipse cx="60" cy="40" rx="3" ry="3" fill="#111"/><path d="M38 68 Q48 60 58 68" stroke="#111" strokeWidth="3" fill="none"/></svg>)},
-];
+type ChatResponse = {
+  text: string;
+  speech_url?: string;
+  avatar_video_url?: string;
+  recommended_products?: Array<{
+    id: number | string;
+    title: string;
+    price?: string;
+    handle?: string;
+    variant_id?: number;
+  }>;
+  expression?: string;
+};
 
-/* ---------- utils ---------- */
-function speakText(text?: string, lang = "en-US") {
-  if (!text) return false;
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang;
-      window.speechSynthesis.speak(u);
-      return true;
-    } catch (e) {
-      console.warn("TTS failed", e);
-    }
-  }
-  return false;
-}
+const isBrowser = typeof window !== "undefined";
 
-/* ---------- component ---------- */
-export default function AvatarWidget() {
-  const [selectedMascot, setSelectedMascot] = useState<string>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.mascot")) || "sunny");
-  const [muted, setMuted] = useState<boolean>(() => (typeof window !== "undefined" && localStorage.getItem("avatar.muted") === "true") || false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [listening, setListening] = useState<boolean>(false);
-  const [chatModalOpen, setChatModalOpen] = useState<boolean>(false);
-  const [composerText, setComposerText] = useState<string>("");
-  const [lastAssistantText, setLastAssistantText] = useState<string | null>(null);
-  const [lastAssistantAudio, setLastAssistantAudio] = useState<string | null>(null);
-  const [recommended, setRecommended] = useState<Product[]>([]);
-  const [mockMode] = useState<boolean>(() => !API_URL);
+/* -------------------------
+   Component
+   -------------------------*/
+export default function AvatarWidget(): JSX.Element {
+  const [open, setOpen] = useState(false); // chat modal
+  const [listening, setListening] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [history, setHistory] = useState<Array<{ role: string; content: string }>>(
+    []
+  );
+  const [lastReply, setLastReply] = useState<ChatResponse | null>(null);
+  const [selectedMascotIndex, setSelectedMascotIndex] = useState(0);
+  const [mockMode] = useState(!process.env.NEXT_PUBLIC_API_URL);
+  const [isWalking, setIsWalking] = useState(false);
+  const controls = useAnimation();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const widgetRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLInputElement | null>(null);
 
-  // Refs
-  const avatarRef = useRef<HTMLButtonElement | null>(null); // correct type for button ref
-  const speechRecRef = useRef<any>(null);
-  const mounted = useRef(false);
+  const selectedMascot: MascotAsset = MASCOT_ASSETS[selectedMascotIndex];
 
+  /* -------------------------
+     Speech recognition setup
+     -------------------------*/
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("avatar.mascot", selectedMascot);
-  }, [selectedMascot]);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("avatar.muted", muted ? "true" : "false");
-  }, [muted]);
+    if (!isBrowser) return;
 
-  useEffect(() => {
-    if (mounted.current) return;
-    mounted.current = true;
-    const greeting = "Hello — tap me to speak, or open the keyboard to type.";
-    pushMessage({ id: `m-${Date.now()}`, text: greeting, sender: "assistant", time: new Date().toISOString() });
-    setLastAssistantText(greeting);
-    if (!muted) speakText(greeting);
-  }, []); // eslint-disable-line
+    // Type defs avoided for broad browser compatibility
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-  function pushMessage(m: Message) {
-    setMessages((s) => [...s, m]);
-  }
-
-  function getMouthPos() {
-    const m = MASCOTS.find((x) => x.id === selectedMascot) || MASCOTS[0];
-    const anchor = m.mouthAnchor || { x: 0.5, y: 0.6 };
-    const el = avatarRef.current;
-    if (!el) return { left: 48, top: 28 };
-    const rect = el.getBoundingClientRect();
-    return { left: rect.left + rect.width * anchor.x, top: rect.top + rect.height * anchor.y };
-  }
-
-  /* ---------- speech recognition ---------- */
-  const startListening = () => {
-    if (typeof window === "undefined") return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition not supported in this browser. Use Chrome or Edge.");
+      recognitionRef.current = null;
       return;
     }
-    try {
-      const rec = new SpeechRecognition();
-      rec.lang = "en-US";
-      rec.interimResults = false;
-      rec.maxAlternatives = 1;
-      rec.onresult = async (e: any) => {
-        const transcript = e.results[0][0].transcript;
-        pushMessage({ id: `u-${Date.now()}`, text: transcript, sender: "user", time: new Date().toISOString() });
-        await handleSend(transcript);
-      };
-      rec.onerror = (err: any) => {
-        console.error("Speech error", err);
-        setListening(false);
-      };
-      rec.onend = () => setListening(false);
-      rec.start();
-      speechRecRef.current = rec;
-      setListening(true);
-    } catch (e) {
-      console.error("startListening failed", e);
-    }
-  };
 
-  const stopListening = () => {
-    try {
-      if (speechRecRef.current) speechRecRef.current.stop();
-    } catch (e) {}
-    speechRecRef.current = null;
-    setListening(false);
-  };
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+    rec.onresult = (evt: any) => {
+      const transcript = evt.results[0][0].transcript;
+      handleSendMessage(transcript);
+    };
+    rec.onend = () => {
+      setListening(false);
+    };
+    recognitionRef.current = rec;
 
-  /* ---------- backend or mock ---------- */
-  async function callBackend(message: string) {
-    if (mockMode) return await mockReply(message);
-    try {
-      const payload = { shop: SHOP, message, history: messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text })) };
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(API_KEY ? { "x-api-key": API_KEY } : {}) },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const t = await res.text().catch(() => "error");
-        throw new Error(t);
-      }
-      const data = await res.json();
-      const answer = data.text || "I don't have an answer right now.";
-      pushMessage({ id: `m-${Date.now()}`, text: answer, sender: "assistant", time: new Date().toISOString(), audioUrl: data.speech_url || undefined });
-      setLastAssistantText(answer);
-      setLastAssistantAudio(data.speech_url || null);
-      setRecommended(data.recommended_products || []);
-      if (!muted) {
-        if (data.speech_url) {
-          const a = new Audio(data.speech_url);
-          a.play().catch(() => speakText(answer));
-        } else {
-          speakText(answer);
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // noop
         }
       }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* -------------------------
+     Play speech url or TTS
+     -------------------------*/
+  async function playSpeech(response: ChatResponse) {
+    if (muted) return;
+    // prefer server provided speech_url
+    if (response.speech_url) {
+      if (!audioRef.current) audioRef.current = new Audio();
+      audioRef.current.src = response.speech_url;
+      try {
+        await audioRef.current.play();
+      } catch (e) {
+        // fallback to TTS if play blocked
+        speakWithTTS(response.text);
+      }
       return;
+    }
+
+    // If avatar_video_url available, we also display it (lip-sync)
+    if (response.avatar_video_url && videoRef.current) {
+      videoRef.current.src = response.avatar_video_url;
+      try {
+        await videoRef.current.play();
+      } catch (e) {
+        // If video cannot play, fallback to TTS
+        speakWithTTS(response.text);
+      }
+      return;
+    }
+
+    // fallback to browser TTS
+    speakWithTTS(response.text);
+  }
+
+  function speakWithTTS(text: string) {
+    if (!isBrowser) return;
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-US";
+    synth.speak(utter);
+  }
+
+  /* -------------------------
+     Send message to server (or mock)
+     -------------------------*/
+  async function fetchChat(payload: {
+    shop?: string;
+    message: string;
+    history?: any;
+  }): Promise<ChatResponse> {
+    if (mockMode) {
+      // demo reply — mimic a small delay
+      await new Promise((r) => setTimeout(r, 600));
+      return {
+        text: `Demo reply to: "${payload.message}" — try providing a real NEXT_PUBLIC_API_URL for live replies.`,
+        speech_url: undefined,
+        recommended_products: [
+          {
+            id: "demo-1",
+            title: "Demo Product",
+            price: "$9.99",
+            handle: "demo-product",
+            variant_id: 111,
+          },
+        ],
+        expression: "happy",
+      };
+    }
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(process.env.NEXT_PUBLIC_API_KEY
+            ? { "x-api-key": process.env.NEXT_PUBLIC_API_KEY }
+            : {}),
+        },
+        body: JSON.stringify({
+          shop: process.env.NEXT_PUBLIC_SHOP || undefined,
+          message: payload.message,
+          history: payload.history || [],
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Chat API error ${res.status}`);
+      }
+      const json = (await res.json()) as ChatResponse;
+      return json;
     } catch (err) {
-      console.error("callBackend error", err);
-      pushMessage({ id: `m-${Date.now()}`, text: "Sorry — couldn't reach server.", sender: "assistant", time: new Date().toISOString() });
-      setLastAssistantText("Sorry — couldn't reach server.");
-      if (!muted) speakText("Sorry — couldn't reach server.");
+      console.error("chat fetch error", err);
+      return {
+        text:
+          "Sorry, I couldn't reach the server. Running in demo mode. Please check your NEXT_PUBLIC_API_URL.",
+      };
     }
   }
 
-  async function mockReply(message: string) {
-    await new Promise((r) => setTimeout(r, 600 + Math.random() * 700));
-    const lower = message.toLowerCase();
-    let reply = "Got it — I have a few recommendations coming right up.";
-    let prods: Product[] = [];
-    if (lower.includes("headphone")) {
-      reply = "Our Premium Wireless Headphones are a top pick.";
-      prods = [{ id: 1, title: "Premium Wireless Headphones", price: "$129.99", handle: "wireless-headphones", variant_id: 111 }];
-    } else if (lower.includes("fitness")) {
-      reply = "Check the Smart Fitness Tracker with long battery life.";
-      prods = [{ id: 2, title: "Smart Fitness Tracker", price: "$89.99", handle: "fitness-tracker", variant_id: 222 }];
+  /* -------------------------
+     Handle new message flow
+     -------------------------*/
+  async function handleSendMessage(message: string) {
+    if (!message || message.trim() === "") return;
+    // add to history locally
+    const newHistory = [...history, { role: "user", content: message }];
+    setHistory(newHistory);
+    // small "walk" animation to approach user when user sends message
+    await animateWalk();
+
+    const reply = await fetchChat({ message, history: newHistory });
+    setLastReply(reply);
+    setHistory((h) => [...h, { role: "assistant", content: reply.text }]);
+    await playSpeech(reply);
+  }
+
+  /* -------------------------
+     Recognition toggles
+     -------------------------*/
+  function toggleListening() {
+    if (!isBrowser) return;
+    const rec = recognitionRef.current;
+    if (!rec) {
+      // No browser support
+      alert("Speech recognition not supported in this browser.");
+      return;
     }
-    pushMessage({ id: `m-${Date.now()}`, text: reply, sender: "assistant", time: new Date().toISOString() });
-    setLastAssistantText(reply);
-    setLastAssistantAudio(null);
-    setRecommended(prods);
-    if (!muted) speakText(reply);
-  }
-
-  // unified send handler
-  async function handleSend(textOverride?: string) {
-    const text = ((textOverride ?? "") || "").trim();
-    if (!text) return;
-    if (!messages.some((m) => m.sender === "user" && m.text === text)) {
-      pushMessage({ id: `u-${Date.now()}`, text, sender: "user", time: new Date().toISOString() });
+    if (!listening) {
+      try {
+        rec.start();
+        setListening(true);
+      } catch (e) {
+        console.warn("recognition start error", e);
+      }
+    } else {
+      try {
+        rec.stop();
+        setListening(false);
+      } catch (e) {
+        // noop
+      }
     }
-    setComposerText("");
-    setChatModalOpen(false);
-    await callBackend(text);
   }
 
-  function handleAddToCart(p: Product) {
-    pushMessage({ id: `c-${Date.now()}`, text: `${p.title} added to cart.`, sender: "assistant", time: new Date().toISOString() });
-    // production: call server-side shopify add-to-cart
+  /* -------------------------
+     Walk animation (mascot moves toward center & back)
+     -------------------------*/
+  async function animateWalk() {
+    // brief walk when interacting
+    setIsWalking(true);
+    const distance = selectedMascot.walkDistance ?? 220;
+    await controls.start({
+      x: [0, -distance / 2, 0], // small forward & back movement loop
+      transition: { duration: 1.2, times: [0, 0.5, 1] },
+    });
+    setIsWalking(false);
   }
 
-  const selected = MASCOTS.find((m) => m.id === selectedMascot) || MASCOTS[0];
+  /* -------------------------
+     Keyboard handling for opening chat quickly
+     -------------------------*/
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // ctrl+k or meta+k OR press "k" on widget focus to open
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((o) => !o);
+      }
+    }
+    if (isBrowser) {
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+    return;
+  }, []);
 
-  return (
-    <>
-      {/* Floating mascot + keyboard */}
-      <div style={{ position: "fixed", right: 24, bottom: 24, zIndex: 9999, display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          onClick={() => setChatModalOpen(true)}
-          title="Open chat"
-          style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,0.95)", boxShadow: "0 6px 18px rgba(2,6,23,0.12)", border: "none", cursor: "pointer" }}
-        >
-          <Keyboard />
-        </button>
+  /* -------------------------
+     Render helpers
+     -------------------------*/
+  function renderMascot() {
+    // If there's an avatar_video_url from last reply, show it in the video overlay
+    const avatarVideo = lastReply?.avatar_video_url;
 
-        <div style={{ position: "relative", width: 92, height: 92 }}>
-          <AnimatePresence>
-            {listening && (
-              <motion.div
-                key="rings"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{ position: "absolute", left: -8, top: -8, width: 108, height: 108, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}
-              >
-                <div style={{ position: "relative", width: 96, height: 96 }}>
-                  <div className="ring ring-1" />
-                  <div className="ring ring-2" />
-                  <div className="ring ring-3" />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+    // Use the high-quality walking video if available, otherwise fall back to static poster
+    return (
+      <div
+        className="avatar-container"
+        style={{
+          position: "relative",
+          width: 124,
+          height: 124,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          pointerEvents: "auto",
+        }}
+      >
+        {/* Video element for lip-synced avatar (overlay) */}
+        <video
+          ref={videoRef}
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: "100%",
+            width: 340,
+            height: "auto",
+            zIndex: 60,
+            borderRadius: 12,
+            display: avatarVideo ? "block" : "none",
+            pointerEvents: "none",
+          }}
+          playsInline
+          muted={muted}
+        />
 
-          <motion.button
-            ref={avatarRef}
-            onClick={() => {
-              if (listening) stopListening();
-              else startListening();
+        {/* Main mascot visual: video if available or poster image */}
+        {selectedMascot.video ? (
+          <motion.video
+            key={selectedMascot.id}
+            src={selectedMascot.video}
+            poster={selectedMascot.poster}
+            loop
+            muted
+            playsInline
+            autoPlay
+            style={{
+              width: 124,
+              height: 124,
+              objectFit: "contain",
+              borderRadius: 10,
+              boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+              zIndex: 50,
+              cursor: "pointer",
             }}
-            whileTap={{ scale: 0.96 }}
-            whileHover={{ scale: 1.03 }}
-            style={{ width: 92, height: 92, borderRadius: 20, background: "linear-gradient(135deg,#7c3aed,#06b6d4)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 30px rgba(0,0,0,0.25)", cursor: "pointer" }}
-            title={listening ? "Listening... click to stop" : "Click to speak"}
-          >
-            <div style={{ width: 72, height: 72, borderRadius: 16, background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 64, height: 64 }}>{selected.svg({ width: 64, height: 64 })}</div>
-            </div>
-          </motion.button>
+            onClick={() => {
+              // click to focus: toggle listening
+              toggleListening();
+            }}
+          />
+        ) : (
+          <img
+            src={selectedMascot.poster}
+            alt={selectedMascot.title}
+            style={{
+              width: 124,
+              height: 124,
+              objectFit: "contain",
+              borderRadius: 10,
+              boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+              zIndex: 50,
+              cursor: "pointer",
+            }}
+            onClick={() => toggleListening()}
+          />
+        )}
+      </div>
+    );
+  }
 
-          <div style={{ position: "absolute", right: -6, bottom: -6 }}>
-            <button onClick={() => setMuted((s) => !s)} title={muted ? "Unmute" : "Mute"} style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: "#fff", boxShadow: "0 6px 14px rgba(2,6,23,0.12)", cursor: "pointer" }}>
-              {muted ? <Slash /> : <Volume2 />}
-            </button>
+  /* -------------------------
+     Render UI
+     -------------------------*/
+  return (
+    <div
+      ref={widgetRef}
+      className="avatar-widget"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        right: 28,
+        bottom: 24,
+        zIndex: 9999,
+        pointerEvents: "none", // container non-interactive; internal elements are interactive
+      }}
+    >
+      {/* Mascot motion wrapper (walks horizontally in micro-animations when interacting) */}
+      <motion.div
+        animate={controls}
+        initial={{ x: 0 }}
+        style={{
+          pointerEvents: "auto",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          transform: "translateZ(0)", // GPU accelerate
+        }}
+      >
+        {/* speech bubble near mascot */}
+        <div
+          style={{
+            display: lastReply ? "block" : "none",
+            maxWidth: 280,
+            marginRight: 8,
+            background: "white",
+            borderRadius: 12,
+            padding: "10px 12px",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+            pointerEvents: "auto",
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#111" }}>
+            {lastReply?.text ?? ""}
           </div>
         </div>
-      </div>
 
-      {/* Assistant speech bubble (near mascot) */}
-      <AnimatePresence>
-        {lastAssistantText && (
-          <motion.div
-            key="assist-bubble"
-            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+        {/* Mascot visual */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            pointerEvents: "auto",
+          }}
+        >
+          {/* Animated listening rings */}
+          <div
+            onClick={() => toggleListening()}
+            role="button"
+            aria-label="Mascot - click to speak"
+            tabIndex={0}
             style={{
-              position: "fixed",
-              right: 24 + 92 + 12,
-              bottom: 24 + 40,
-              zIndex: 9998,
-              width: 300,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 154,
+              height: 154,
+              pointerEvents: "auto",
+              position: "relative",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") toggleListening();
             }}
           >
-            <div style={{ background: "linear-gradient(180deg,#ffffff,#f8fafc)", padding: 12, borderRadius: 12, boxShadow: "0 10px 30px rgba(2,6,23,0.15)", fontSize: 14 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Moxi</div>
-              <div style={{ color: "#0f172a" }}>{lastAssistantText}</div>
-              {lastAssistantAudio && (
-                <div style={{ marginTop: 8 }}>
-                  <button onClick={() => { const a = new Audio(lastAssistantAudio); a.play().catch(()=>{}); }} style={{ padding: "6px 10px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff" }}>Play audio</button>
-                </div>
-              )}
+            {/* rings */}
+            <motion.div
+              animate={
+                listening
+                  ? { scale: [1, 1.12, 1], opacity: [0.6, 0.9, 0.6] }
+                  : { scale: 1, opacity: 1 }
+              }
+              transition={{ repeat: listening ? Infinity : 0, duration: 1.2 }}
+              style={{
+                position: "absolute",
+                width: 154,
+                height: 154,
+                borderRadius: "50%",
+                background: "rgba(99,102,241,0.08)",
+                pointerEvents: "none",
+                zIndex: 40,
+              }}
+            />
+            <motion.div
+              animate={
+                listening
+                  ? { scale: [1, 1.08, 1], opacity: [0.4, 0.85, 0.4] }
+                  : { scale: 1, opacity: 1 }
+              }
+              transition={{ repeat: listening ? Infinity : 0, duration: 1.6 }}
+              style={{
+                position: "absolute",
+                width: 120,
+                height: 120,
+                borderRadius: "50%",
+                background: "rgba(99,102,241,0.06)",
+                pointerEvents: "none",
+                zIndex: 39,
+              }}
+            />
+            {/* actual mascot */}
+            {renderMascot()}
+            {/* small mic badge */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 8,
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                background: "rgba(255,255,255,0.95)",
+                padding: "4px 8px",
+                borderRadius: 20,
+                boxShadow: "0 6px 14px rgba(0,0,0,0.08)",
+                zIndex: 70,
+              }}
+            >
+              <button
+                onClick={() => toggleListening()}
+                title={listening ? "Stop listening" : "Start listening"}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                aria-pressed={listening}
+              >
+                <Mic2 size={16} />
+                <span style={{ fontSize: 12 }}>
+                  {listening ? "Listening..." : "Speak"}
+                </span>
+              </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          {/* controls row (mute, open chat, change mascot) */}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginTop: 8,
+              alignItems: "center",
+              pointerEvents: "auto",
+            }}
+          >
+            <button
+              onClick={() => setMuted((m) => !m)}
+              title={muted ? "Unmute" : "Mute"}
+              style={{
+                border: "none",
+                background: "white",
+                padding: 8,
+                borderRadius: 10,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                cursor: "pointer",
+              }}
+            >
+              {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+
+            <button
+              onClick={() => setOpen((o) => !o)}
+              title="Open chat"
+              style={{
+                border: "none",
+                background: "white",
+                padding: 8,
+                borderRadius: 10,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                cursor: "pointer",
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <Keyboard size={14} />
+              <span style={{ fontSize: 13 }}>Chat</span>
+            </button>
+
+            {/* Mascot selector (small) */}
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                background: "rgba(255,255,255,0.95)",
+                padding: "6px 8px",
+                borderRadius: 12,
+                boxShadow: "0 6px 14px rgba(0,0,0,0.04)",
+              }}
+            >
+              {MASCOT_ASSETS.map((m, i) => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedMascotIndex(i)}
+                  title={m.title}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    border:
+                      selectedMascotIndex === i
+                        ? "2px solid rgb(99,102,241)"
+                        : "1px solid rgba(16,24,40,0.06)",
+                    padding: 0,
+                    background: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <img
+                    src={m.poster}
+                    alt={m.title}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Chat modal */}
-      <AnimatePresence>
-        {chatModalOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            style={{ position: "fixed", right: 24, bottom: 140, zIndex: 10000 }}
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            right: 28,
+            bottom: 190,
+            width: 360,
+            maxWidth: "calc(100vw - 40px)",
+            background: "#fff",
+            borderRadius: 12,
+            boxShadow: "0 20px 50px rgba(2,6,23,0.2)",
+            padding: 14,
+            zIndex: 10000,
+            pointerEvents: "auto",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <strong>Chat with {selectedMascot.title}</strong>
+            <button
+              title="Close"
+              onClick={() => setOpen(false)}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            >
+              <XIcon size={16} />
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 12,
+              maxHeight: 340,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              paddingRight: 6,
+            }}
           >
-            <div style={{ width: 420, borderRadius: 12, boxShadow: "0 12px 38px rgba(2,6,23,0.28)", overflow: "hidden", background: "#fff", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: 12, borderBottom: "1px solid rgba(0,0,0,0.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>{selected.svg({ width: 32, height: 32 })}</div>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>Chat with Moxi</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>Voice-first assistant — type or speak</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <select value={selectedMascot} onChange={(e) => setSelectedMascot(e.target.value)} style={{ padding: "6px 8px", borderRadius: 8 }}>
-                    {MASCOTS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  <button onClick={() => setChatModalOpen(false)} style={{ border: "none", background: "transparent", cursor: "pointer" }}><X /></button>
-                </div>
+            {history.length === 0 && (
+              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                Say hi to start the conversation — click the mascot or press
+                Ctrl/Cmd+K.
               </div>
+            )}
 
-              <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, width: "100%" }}>
-                <div style={{ overflow: "auto", maxHeight: 220 }}>
-                  {messages.map((m) => (
-                    <div key={m.id} style={{ display: "flex", justifyContent: m.sender === "user" ? "flex-end" : "flex-start", padding: "6px 0" }}>
-                      <div style={{ maxWidth: "78%" }}>
-                        <div style={{
-                          display: "inline-block",
-                          background: m.sender === "user" ? "#4f46e5" : "#fff",
-                          color: m.sender === "user" ? "#fff" : "#0f172a",
-                          padding: "8px 10px",
-                          borderRadius: 12,
-                          boxShadow: "0 6px 16px rgba(2,6,23,0.06)"
-                        }}>
-                          <div style={{ fontSize: 13 }}>{m.text}</div>
-                        </div>
-                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>{new Date(m.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {history.map((m, idx) => (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  background: m.role === "user" ? "#eef2ff" : "#f3f4f6",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  maxWidth: "85%",
+                  fontSize: 13,
+                }}
+              >
+                {m.content}
+              </div>
+            ))}
+          </div>
 
-                {recommended.length > 0 && (
-                  <div>
-                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Recommended for you</div>
-                    <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                      {recommended.map((p) => (
-                        <div key={p.id} style={{ minWidth: 160, background: "#f8fafc", padding: 8, borderRadius: 8 }}>
-                          <div style={{ fontWeight: 600 }}>{p.title}</div>
-                          <div style={{ color: "#6b7280", marginBottom: 8 }}>{p.price}</div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => (window.location.href = `/products/${p.handle}`)} style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.06)", background: "#fff" }}>View</button>
-                            <button onClick={() => handleAddToCart(p)} style={{ padding: "6px 8px", borderRadius: 8, border: "none", background: "#4f46e5", color: "#fff" }}>Add</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              ref={composerRef}
+              type="text"
+              placeholder="Type a message..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const v = (e.target as HTMLInputElement).value;
+                  (e.target as HTMLInputElement).value = "";
+                  handleSendMessage(v);
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(16,24,40,0.06)",
+              }}
+            />
+            <button
+              title="Send"
+              onClick={() => {
+                const v = composerRef.current?.value ?? "";
+                if (!v) return;
+                composerRef.current!.value = "";
+                handleSendMessage(v);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "none",
+                background: "rgb(99,102,241)",
+                color: "white",
+                cursor: "pointer",
+              }}
+            >
+              Send
+            </button>
+          </div>
+
+          {/* recommended products (from lastReply) */}
+          {lastReply?.recommended_products?.length ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>Recommended</div>
+              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                {lastReply.recommended_products!.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      minWidth: 160,
+                      background: "#fff",
+                      border: "1px solid rgba(16,24,40,0.04)",
+                      padding: 8,
+                      borderRadius: 8,
+                      boxShadow: "0 6px 12px rgba(2,6,23,0.04)",
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{p.title}</div>
+                    <div style={{ fontSize: 13, color: "#6b7280" }}>{p.price}</div>
+                    <button
+                      style={{
+                        marginTop: 8,
+                        padding: "6px 8px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: "rgb(99,102,241)",
+                        color: "#fff",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                      onClick={() => {
+                        // Add-to-cart stub: you should replace with pages/api/shopify-add-to-cart.ts
+                        alert(
+                          `Add-to-cart stub: implement pages/api/shopify-add-to-cart.ts to add ${p.title} to cart.`
+                        );
+                      }}
+                    >
+                      Add
+                    </button>
                   </div>
-                )}
-
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input
-                    placeholder="Type your message or press Send..."
-                    value={composerText}
-                    onChange={(e) => setComposerText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleSend(composerText); }}
-                    style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.06)" }}
-                  />
-                  <button onClick={() => handleSend(composerText)} style={{ padding: "10px 12px", borderRadius: 10, background: "#4f46e5", color: "white", border: "none" }}>
-                    <Send />
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ) : null}
+        </div>
+      )}
 
-      {/* small scoped CSS */}
-      <style jsx>{`
-        .ring {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%,-50%);
-          border-radius: 999px;
-          border: 2px solid rgba(99,102,241,0.12);
-          box-shadow: 0 12px 30px rgba(99,102,241,0.06);
-          animation: ringScale 1.8s infinite ease-in-out;
-        }
-        .ring-1 { width: 96px; height: 96px; animation-delay: 0s; }
-        .ring-2 { width: 72px; height: 72px; animation-delay: 0.2s; opacity: 0.85; }
-        .ring-3 { width: 48px; height: 48px; animation-delay: 0.4s; opacity: 0.6; }
-        @keyframes ringScale {
-          0% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.9; }
-          50% { transform: translate(-50%,-50%) scale(1.05); opacity: 0.6; }
-          100% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.3; }
-        }
-        button:focus { outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); border-radius: 8px; }
-      `}</style>
-    </>
+      {/* hidden audio/video elements (controlled programmatically) */}
+      <audio ref={audioRef} style={{ display: "none" }} />
+      <video ref={videoRef} style={{ display: "none" }} playsInline />
+
+      {/* small accessibility helper for keyboard open */}
+      <div style={{ position: "fixed", right: 30, bottom: 8, zIndex: 9999 }}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          title="Open chat (Ctrl/Cmd+K)"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            pointerEvents: "auto",
+          }}
+        >
+          <MessageSquare size={18} />
+        </button>
+      </div>
+    </div>
   );
 }
