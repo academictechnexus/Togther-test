@@ -1,3 +1,4 @@
+// components/AvatarWidget.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { motion, useAnimation } from "framer-motion";
 import {
@@ -12,76 +13,72 @@ import {
 /**
  * AvatarWidget.tsx
  *
- * Enhanced "full-image" mascot widget:
- * - Full-image/video mascots that can walk across the screen (animated with framer-motion).
- * - Click mascot to start/stop listening (Web Speech API).
- * - Plays backend-provided speech_url (audio) or falls back to browser TTS.
- * - If avatar_video_url provided, shows lip-synced video overlay near mascot.
- * - Keeps the chat modal, speech bubble, recommended products and mock mode behavior.
+ * Drop-in replacement that:
+ * - Provides a walking, full-image/video mascot (walks across screen & back)
+ * - Click mascot to start/stop listening (Web Speech API)
+ * - Animated listening rings while recording
+ * - Uses speech_url from backend if provided, otherwise uses browser TTS fallback
+ * - Chat modal (conversation history, composer, recommended product cards, add-to-cart stub)
+ * - Mock/demo mode when NEXT_PUBLIC_API_URL is not set
  *
- * Requirements:
- * - framer-motion and lucide-react installed.
- * - Provide high-quality assets (mp4/webm or png) and set their URLs in MASCOT_ASSETS below.
- *
- * NOTE: keep CSS/utility classes minimal — adapt to your Tailwind/design system.
+ * Paste this file into components/AvatarWidget.tsx and commit.
  */
 
-/* -------------------------
-   Configure mascot assets
-   -------------------------
-   Replace these URLs with your high-quality mascots.
-   Each entry may have:
-     - poster: static PNG used as fallback
-     - video: looping MP4/WebM used for walking/idle
-     - walkDistance: px to move across when doing "walk" animation
+/* ---------------------------
+   Demo asset sources (changeable)
+   ---------------------------
+   - A small, public MP4 is used for demo (sample video). Replace with your own MP4s in /public/mascots/ if you want.
+   - Poster images from picsum.photos use different seeds to appear as different mascots.
 */
+const SAMPLE_VIDEO =
+  "https://sample-videos.com/video123/mp4/480/big_buck_bunny_480p_5mb.mp4";
+
+// Default demo mascots (URLs point to public sample assets)
 const MASCOT_ASSETS = [
   {
     id: "mascot-1",
-    title: "Forest Walker",
-    poster: "/mascots/m1.png",
-    video: "/mascots/m1_walk.mp4", // optional
-    idleVideo: "/mascots/m1_idle.mp4",
-    walkDistance: 220,
+    title: "Potato Pal",
+    poster: "https://picsum.photos/seed/potato/400/400",
+    video: SAMPLE_VIDEO,
+    idleVideo: SAMPLE_VIDEO,
+    // if you host locally, replace with "/mascots/m1_walk.mp4" etc.
+    walkDistance: 700,
   },
   {
     id: "mascot-2",
-    title: "Robo Concierge",
-    poster: "/mascots/m2.png",
-    video: "/mascots/m2_walk.mp4",
-    idleVideo: "/mascots/m2_idle.mp4",
-    walkDistance: 260,
+    title: "Pizza Dude",
+    poster: "https://picsum.photos/seed/pizza/400/400",
+    video: SAMPLE_VIDEO,
+    idleVideo: SAMPLE_VIDEO,
+    walkDistance: 700,
   },
   {
     id: "mascot-3",
-    title: "Friendly Guide",
-    poster: "/mascots/m3.png",
-    video: "/mascots/m3_walk.mp4",
-    idleVideo: "/mascots/m3_idle.mp4",
-    walkDistance: 200,
+    title: "Turtle Bro",
+    poster: "https://picsum.photos/seed/turtle/400/400",
+    video: SAMPLE_VIDEO,
+    idleVideo: SAMPLE_VIDEO,
+    walkDistance: 700,
   },
   {
     id: "mascot-4",
-    title: "Pixel Pal",
-    poster: "/mascots/m4.png",
-    video: "/mascots/m4_walk.mp4",
-    idleVideo: "/mascots/m4_idle.mp4",
-    walkDistance: 240,
+    title: "Foxy Friend",
+    poster: "https://picsum.photos/seed/fox/400/400",
+    video: SAMPLE_VIDEO,
+    idleVideo: SAMPLE_VIDEO,
+    walkDistance: 700,
   },
   {
     id: "mascot-5",
-    title: "Aurora",
-    poster: "/mascots/m5.png",
-    video: "/mascots/m5_walk.mp4",
-    idleVideo: "/mascots/m5_idle.mp4",
-    walkDistance: 210,
+    title: "Robo Pal",
+    poster: "https://picsum.photos/seed/robot/400/400",
+    video: SAMPLE_VIDEO,
+    idleVideo: SAMPLE_VIDEO,
+    walkDistance: 700,
   },
 ] as const;
 
-/* -------------------------
-   Types
-   -------------------------*/
-type MascotAsset = typeof MASCOT_ASSETS[number];
+type Mascot = typeof MASCOT_ASSETS[number];
 
 type ChatResponse = {
   text: string;
@@ -99,10 +96,8 @@ type ChatResponse = {
 
 const isBrowser = typeof window !== "undefined";
 
-/* -------------------------
-   Component
-   -------------------------*/
 export default function AvatarWidget(): JSX.Element {
+  // UI state
   const [open, setOpen] = useState(false); // chat modal
   const [listening, setListening] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -113,14 +108,15 @@ export default function AvatarWidget(): JSX.Element {
   const [selectedMascotIndex, setSelectedMascotIndex] = useState(0);
   const [mockMode] = useState(!process.env.NEXT_PUBLIC_API_URL);
   const [isWalking, setIsWalking] = useState(false);
+
+  // animation & refs
   const controls = useAnimation();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const recognitionRef = useRef<any>(null);
-  const widgetRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
 
-  const selectedMascot: MascotAsset = MASCOT_ASSETS[selectedMascotIndex];
+  const selectedMascot: Mascot = MASCOT_ASSETS[selectedMascotIndex];
 
   /* -------------------------
      Speech recognition setup
@@ -128,7 +124,6 @@ export default function AvatarWidget(): JSX.Element {
   useEffect(() => {
     if (!isBrowser) return;
 
-    // Type defs avoided for broad browser compatibility
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -167,59 +162,61 @@ export default function AvatarWidget(): JSX.Element {
      -------------------------*/
   async function playSpeech(response: ChatResponse) {
     if (muted) return;
-    // prefer server provided speech_url
+    if (!response) return;
+
+    // prefer server-provided speech_url
     if (response.speech_url) {
       if (!audioRef.current) audioRef.current = new Audio();
       audioRef.current.src = response.speech_url;
       try {
         await audioRef.current.play();
       } catch (e) {
-        // fallback to TTS if play blocked
+        // fallback to TTS
         speakWithTTS(response.text);
       }
       return;
     }
 
-    // If avatar_video_url available, we also display it (lip-sync)
+    // If avatar_video_url available, show it in the small overlay video element and play its audio separately if provided
     if (response.avatar_video_url && videoRef.current) {
-      videoRef.current.src = response.avatar_video_url;
       try {
+        videoRef.current.src = response.avatar_video_url;
         await videoRef.current.play();
       } catch (e) {
-        // If video cannot play, fallback to TTS
         speakWithTTS(response.text);
       }
       return;
     }
 
-    // fallback to browser TTS
+    // fallback - browser TTS
     speakWithTTS(response.text);
   }
 
-  function speakWithTTS(text: string) {
+  function speakWithTTS(text?: string) {
     if (!isBrowser) return;
+    if (!text) return;
     const synth = window.speechSynthesis;
     if (!synth) return;
-
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
     synth.speak(utter);
   }
 
   /* -------------------------
-     Send message to server (or mock)
+     Fetch chat (mock or real)
      -------------------------*/
   async function fetchChat(payload: {
     shop?: string;
     message: string;
     history?: any;
+    mascotId?: string;
   }): Promise<ChatResponse> {
     if (mockMode) {
-      // demo reply — mimic a small delay
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 500));
       return {
-        text: `Demo reply to: "${payload.message}" — try providing a real NEXT_PUBLIC_API_URL for live replies.`,
+        text: `Demo reply to "${payload.message}" (mock mode).`,
         speech_url: undefined,
+        avatar_video_url: undefined,
         recommended_products: [
           {
             id: "demo-1",
@@ -246,6 +243,7 @@ export default function AvatarWidget(): JSX.Element {
           shop: process.env.NEXT_PUBLIC_SHOP || undefined,
           message: payload.message,
           history: payload.history || [],
+          mascotId: payload.mascotId,
         }),
       });
 
@@ -264,30 +262,33 @@ export default function AvatarWidget(): JSX.Element {
   }
 
   /* -------------------------
-     Handle new message flow
+     Handle send message
      -------------------------*/
   async function handleSendMessage(message: string) {
     if (!message || message.trim() === "") return;
-    // add to history locally
     const newHistory = [...history, { role: "user", content: message }];
     setHistory(newHistory);
-    // small "walk" animation to approach user when user sends message
+
+    // brief walk when interacting
     await animateWalk();
 
-    const reply = await fetchChat({ message, history: newHistory });
+    const reply = await fetchChat({
+      message,
+      history: newHistory,
+      mascotId: selectedMascot.id,
+    });
     setLastReply(reply);
     setHistory((h) => [...h, { role: "assistant", content: reply.text }]);
     await playSpeech(reply);
   }
 
   /* -------------------------
-     Recognition toggles
+     Toggle recognition
      -------------------------*/
   function toggleListening() {
     if (!isBrowser) return;
     const rec = recognitionRef.current;
     if (!rec) {
-      // No browser support
       alert("Speech recognition not supported in this browser.");
       return;
     }
@@ -309,25 +310,26 @@ export default function AvatarWidget(): JSX.Element {
   }
 
   /* -------------------------
-     Walk animation (mascot moves toward center & back)
+     Walk animation (across screen & back)
      -------------------------*/
   async function animateWalk() {
-    // brief walk when interacting
     setIsWalking(true);
-    const distance = selectedMascot.walkDistance ?? 220;
+    const viewportWidth = isBrowser ? window.innerWidth : 1200;
+    // The movement range - tune multiplier to make it longer/shorter
+    const distance = Math.min(viewportWidth * 0.75, selectedMascot.walkDistance ?? 800);
+    // Move right -> left -> right -> dock (gives a visible "walk across" motion)
     await controls.start({
-      x: [0, -distance / 2, 0], // small forward & back movement loop
-      transition: { duration: 1.2, times: [0, 0.5, 1] },
+      x: [0, -distance, distance * 0.3, 0],
+      transition: { duration: 3.2, times: [0, 0.45, 0.8, 1], ease: "easeInOut" },
     });
     setIsWalking(false);
   }
 
   /* -------------------------
-     Keyboard handling for opening chat quickly
+     keyboard shortcut (Ctrl/Cmd+K) toggles chat modal
      -------------------------*/
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // ctrl+k or meta+k OR press "k" on widget focus to open
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen((o) => !o);
@@ -337,109 +339,28 @@ export default function AvatarWidget(): JSX.Element {
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
     }
-    return;
   }, []);
 
   /* -------------------------
-     Render helpers
+     Helper: choose which video (idle vs walk)
      -------------------------*/
-  function renderMascot() {
-    // If there's an avatar_video_url from last reply, show it in the video overlay
-    const avatarVideo = lastReply?.avatar_video_url;
-
-    // Use the high-quality walking video if available, otherwise fall back to static poster
-    return (
-      <div
-        className="avatar-container"
-        style={{
-          position: "relative",
-          width: 124,
-          height: 124,
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "center",
-          pointerEvents: "auto",
-        }}
-      >
-        {/* Video element for lip-synced avatar (overlay) */}
-        <video
-          ref={videoRef}
-          style={{
-            position: "absolute",
-            bottom: 0,
-            right: "100%",
-            width: 340,
-            height: "auto",
-            zIndex: 60,
-            borderRadius: 12,
-            display: avatarVideo ? "block" : "none",
-            pointerEvents: "none",
-          }}
-          playsInline
-          muted={muted}
-        />
-
-        {/* Main mascot visual: video if available or poster image */}
-        {selectedMascot.video ? (
-          <motion.video
-            key={selectedMascot.id}
-            src={selectedMascot.video}
-            poster={selectedMascot.poster}
-            loop
-            muted
-            playsInline
-            autoPlay
-            style={{
-              width: 124,
-              height: 124,
-              objectFit: "contain",
-              borderRadius: 10,
-              boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
-              zIndex: 50,
-              cursor: "pointer",
-            }}
-            onClick={() => {
-              // click to focus: toggle listening
-              toggleListening();
-            }}
-          />
-        ) : (
-          <img
-            src={selectedMascot.poster}
-            alt={selectedMascot.title}
-            style={{
-              width: 124,
-              height: 124,
-              objectFit: "contain",
-              borderRadius: 10,
-              boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
-              zIndex: 50,
-              cursor: "pointer",
-            }}
-            onClick={() => toggleListening()}
-          />
-        )}
-      </div>
-    );
-  }
+  const displayVideoSrc =
+    isWalking && selectedMascot.video ? selectedMascot.video : selectedMascot.idleVideo ?? selectedMascot.video;
 
   /* -------------------------
-     Render UI
+     Render
      -------------------------*/
   return (
     <div
-      ref={widgetRef}
-      className="avatar-widget"
       aria-live="polite"
       style={{
         position: "fixed",
         right: 28,
         bottom: 24,
         zIndex: 9999,
-        pointerEvents: "none", // container non-interactive; internal elements are interactive
+        pointerEvents: "none",
       }}
     >
-      {/* Mascot motion wrapper (walks horizontally in micro-animations when interacting) */}
       <motion.div
         animate={controls}
         initial={{ x: 0 }}
@@ -448,28 +369,27 @@ export default function AvatarWidget(): JSX.Element {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          transform: "translateZ(0)", // GPU accelerate
+          transform: "translateZ(0)",
         }}
       >
-        {/* speech bubble near mascot */}
+        {/* speech bubble */}
         <div
           style={{
             display: lastReply ? "block" : "none",
-            maxWidth: 280,
+            maxWidth: 300,
             marginRight: 8,
             background: "white",
             borderRadius: 12,
             padding: "10px 12px",
             boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
             pointerEvents: "auto",
+            fontSize: 13,
           }}
         >
-          <div style={{ fontSize: 13, color: "#111" }}>
-            {lastReply?.text ?? ""}
-          </div>
+          {lastReply?.text ?? ""}
         </div>
 
-        {/* Mascot visual */}
+        {/* mascot container */}
         <div
           style={{
             display: "flex",
@@ -478,41 +398,40 @@ export default function AvatarWidget(): JSX.Element {
             pointerEvents: "auto",
           }}
         >
-          {/* Animated listening rings */}
           <div
-            onClick={() => toggleListening()}
             role="button"
-            aria-label="Mascot - click to speak"
+            onClick={() => toggleListening()}
             tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") toggleListening();
+            }}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 154,
-              height: 154,
-              pointerEvents: "auto",
+              width: 160,
+              height: 160,
               position: "relative",
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") toggleListening();
+              pointerEvents: "auto",
+              cursor: "pointer",
             }}
           >
-            {/* rings */}
+            {/* animated rings */}
             <motion.div
               animate={
                 listening
-                  ? { scale: [1, 1.12, 1], opacity: [0.6, 0.9, 0.6] }
+                  ? { scale: [1, 1.12, 1], opacity: [0.6, 0.95, 0.6] }
                   : { scale: 1, opacity: 1 }
               }
               transition={{ repeat: listening ? Infinity : 0, duration: 1.2 }}
               style={{
                 position: "absolute",
-                width: 154,
-                height: 154,
+                width: 160,
+                height: 160,
                 borderRadius: "50%",
-                background: "rgba(99,102,241,0.08)",
+                background: "rgba(99,102,241,0.06)",
+                zIndex: 1,
                 pointerEvents: "none",
-                zIndex: 40,
               }}
             />
             <motion.div
@@ -524,17 +443,50 @@ export default function AvatarWidget(): JSX.Element {
               transition={{ repeat: listening ? Infinity : 0, duration: 1.6 }}
               style={{
                 position: "absolute",
-                width: 120,
-                height: 120,
+                width: 124,
+                height: 124,
                 borderRadius: "50%",
-                background: "rgba(99,102,241,0.06)",
+                background: "rgba(99,102,241,0.04)",
+                zIndex: 1,
                 pointerEvents: "none",
-                zIndex: 39,
               }}
             />
-            {/* actual mascot */}
-            {renderMascot()}
-            {/* small mic badge */}
+
+            {/* main video / poster */}
+            {displayVideoSrc ? (
+              <video
+                key={selectedMascot.id + (isWalking ? "-walk" : "-idle")}
+                src={displayVideoSrc}
+                poster={selectedMascot.poster}
+                loop
+                muted
+                playsInline
+                autoPlay
+                style={{
+                  width: 160,
+                  height: 160,
+                  objectFit: "cover",
+                  borderRadius: 14,
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+                  zIndex: 3,
+                }}
+              />
+            ) : (
+              <img
+                src={selectedMascot.poster}
+                alt={selectedMascot.title}
+                style={{
+                  width: 160,
+                  height: 160,
+                  objectFit: "cover",
+                  borderRadius: 14,
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+                  zIndex: 3,
+                }}
+              />
+            )}
+
+            {/* mic badge */}
             <div
               style={{
                 position: "absolute",
@@ -545,10 +497,10 @@ export default function AvatarWidget(): JSX.Element {
                 gap: 6,
                 alignItems: "center",
                 background: "rgba(255,255,255,0.95)",
-                padding: "4px 8px",
+                padding: "6px 10px",
                 borderRadius: 20,
                 boxShadow: "0 6px 14px rgba(0,0,0,0.08)",
-                zIndex: 70,
+                zIndex: 6,
               }}
             >
               <button
@@ -560,19 +512,17 @@ export default function AvatarWidget(): JSX.Element {
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 8,
                 }}
                 aria-pressed={listening}
               >
                 <Mic2 size={16} />
-                <span style={{ fontSize: 12 }}>
-                  {listening ? "Listening..." : "Speak"}
-                </span>
+                <span style={{ fontSize: 13 }}>{listening ? "Listening" : "Speak"}</span>
               </button>
             </div>
           </div>
 
-          {/* controls row (mute, open chat, change mascot) */}
+          {/* controls: mute, open chat, mascot selector */}
           <div
             style={{
               display: "flex",
@@ -616,7 +566,7 @@ export default function AvatarWidget(): JSX.Element {
               <span style={{ fontSize: 13 }}>Chat</span>
             </button>
 
-            {/* Mascot selector (small) */}
+            {/* small mascot selector */}
             <div
               style={{
                 display: "flex",
@@ -634,8 +584,8 @@ export default function AvatarWidget(): JSX.Element {
                   onClick={() => setSelectedMascotIndex(i)}
                   title={m.title}
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 36,
+                    height: 36,
                     borderRadius: 6,
                     overflow: "hidden",
                     border:
@@ -668,7 +618,7 @@ export default function AvatarWidget(): JSX.Element {
             position: "fixed",
             right: 28,
             bottom: 190,
-            width: 360,
+            width: 380,
             maxWidth: "calc(100vw - 40px)",
             background: "#fff",
             borderRadius: 12,
@@ -678,7 +628,7 @@ export default function AvatarWidget(): JSX.Element {
             pointerEvents: "auto",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <strong>Chat with {selectedMascot.title}</strong>
             <button
               title="Close"
@@ -696,7 +646,7 @@ export default function AvatarWidget(): JSX.Element {
           <div
             style={{
               marginTop: 12,
-              maxHeight: 340,
+              maxHeight: 320,
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -760,7 +710,7 @@ export default function AvatarWidget(): JSX.Element {
                 borderRadius: 10,
                 border: "none",
                 background: "rgb(99,102,241)",
-                color: "white",
+                color: "#fff",
                 cursor: "pointer",
               }}
             >
@@ -768,7 +718,7 @@ export default function AvatarWidget(): JSX.Element {
             </button>
           </div>
 
-          {/* recommended products (from lastReply) */}
+          {/* recommended products */}
           {lastReply?.recommended_products?.length ? (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 13, marginBottom: 6 }}>Recommended</div>
@@ -799,7 +749,6 @@ export default function AvatarWidget(): JSX.Element {
                         fontSize: 13,
                       }}
                       onClick={() => {
-                        // Add-to-cart stub: you should replace with pages/api/shopify-add-to-cart.ts
                         alert(
                           `Add-to-cart stub: implement pages/api/shopify-add-to-cart.ts to add ${p.title} to cart.`
                         );
@@ -815,11 +764,11 @@ export default function AvatarWidget(): JSX.Element {
         </div>
       )}
 
-      {/* hidden audio/video elements (controlled programmatically) */}
+      {/* hidden audio/video elements */}
       <audio ref={audioRef} style={{ display: "none" }} />
       <video ref={videoRef} style={{ display: "none" }} playsInline />
 
-      {/* small accessibility helper for keyboard open */}
+      {/* small helper button */}
       <div style={{ position: "fixed", right: 30, bottom: 8, zIndex: 9999 }}>
         <button
           onClick={() => setOpen((o) => !o)}
