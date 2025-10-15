@@ -11,29 +11,19 @@ import {
 } from "lucide-react";
 
 /**
- * AvatarWidget.tsx
+ * AvatarWidget.tsx — copy-paste ready
  *
- * Drop-in replacement that:
- * - Provides a walking, full-image/video mascot (walks across screen & back)
- * - Click mascot to start/stop listening (Web Speech API)
- * - Animated listening rings while recording
- * - Uses speech_url from backend if provided, otherwise uses browser TTS fallback
- * - Chat modal (conversation history, composer, recommended product cards, add-to-cart stub)
- * - Mock/demo mode when NEXT_PUBLIC_API_URL is not set
+ * Uses public URLs (no local assets required):
+ * - Poster images: picsum.photos (seeded so each mascot looks different)
+ * - Video (idle & walk): sample-videos.com Big Buck Bunny MP4 (public)
  *
- * Paste this file into components/AvatarWidget.tsx and commit.
+ * Drop this file into components/AvatarWidget.tsx and it should work immediately.
  */
 
-/* ---------------------------
-   Demo asset sources (changeable)
-   ---------------------------
-   - A small, public MP4 is used for demo (sample video). Replace with your own MP4s in /public/mascots/ if you want.
-   - Poster images from picsum.photos use different seeds to appear as different mascots.
-*/
 const SAMPLE_VIDEO =
   "https://sample-videos.com/video123/mp4/480/big_buck_bunny_480p_5mb.mp4";
 
-// Default demo mascots (URLs point to public sample assets)
+// 5 mascots with direct public URLs (poster + mp4 as idle & walk)
 const MASCOT_ASSETS = [
   {
     id: "mascot-1",
@@ -41,7 +31,6 @@ const MASCOT_ASSETS = [
     poster: "https://picsum.photos/seed/potato/400/400",
     video: SAMPLE_VIDEO,
     idleVideo: SAMPLE_VIDEO,
-    // if you host locally, replace with "/mascots/m1_walk.mp4" etc.
     walkDistance: 700,
   },
   {
@@ -98,7 +87,7 @@ const isBrowser = typeof window !== "undefined";
 
 export default function AvatarWidget(): JSX.Element {
   // UI state
-  const [open, setOpen] = useState(false); // chat modal
+  const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [muted, setMuted] = useState(false);
   const [history, setHistory] = useState<Array<{ role: string; content: string }>>(
@@ -118,20 +107,15 @@ export default function AvatarWidget(): JSX.Element {
 
   const selectedMascot: Mascot = MASCOT_ASSETS[selectedMascotIndex];
 
-  /* -------------------------
-     Speech recognition setup
-     -------------------------*/
+  /* Speech recognition setup */
   useEffect(() => {
     if (!isBrowser) return;
-
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
     if (!SpeechRecognition) {
       recognitionRef.current = null;
       return;
     }
-
     const rec = new SpeechRecognition();
     rec.continuous = false;
     rec.interimResults = false;
@@ -149,35 +133,26 @@ export default function AvatarWidget(): JSX.Element {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch (e) {
-          // noop
-        }
+        } catch {}
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* -------------------------
-     Play speech url or TTS
-     -------------------------*/
+  /* Play speech url or TTS */
   async function playSpeech(response: ChatResponse) {
     if (muted) return;
     if (!response) return;
-
-    // prefer server-provided speech_url
     if (response.speech_url) {
       if (!audioRef.current) audioRef.current = new Audio();
       audioRef.current.src = response.speech_url;
       try {
         await audioRef.current.play();
       } catch (e) {
-        // fallback to TTS
         speakWithTTS(response.text);
       }
       return;
     }
-
-    // If avatar_video_url available, show it in the small overlay video element and play its audio separately if provided
     if (response.avatar_video_url && videoRef.current) {
       try {
         videoRef.current.src = response.avatar_video_url;
@@ -187,8 +162,6 @@ export default function AvatarWidget(): JSX.Element {
       }
       return;
     }
-
-    // fallback - browser TTS
     speakWithTTS(response.text);
   }
 
@@ -202,9 +175,7 @@ export default function AvatarWidget(): JSX.Element {
     synth.speak(utter);
   }
 
-  /* -------------------------
-     Fetch chat (mock or real)
-     -------------------------*/
+  /* Fetch chat (mock or real) */
   async function fetchChat(payload: {
     shop?: string;
     message: string;
@@ -212,7 +183,7 @@ export default function AvatarWidget(): JSX.Element {
     mascotId?: string;
   }): Promise<ChatResponse> {
     if (mockMode) {
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 450));
       return {
         text: `Demo reply to "${payload.message}" (mock mode).`,
         speech_url: undefined,
@@ -261,9 +232,7 @@ export default function AvatarWidget(): JSX.Element {
     }
   }
 
-  /* -------------------------
-     Handle send message
-     -------------------------*/
+  /* Handle send message */
   async function handleSendMessage(message: string) {
     if (!message || message.trim() === "") return;
     const newHistory = [...history, { role: "user", content: message }];
@@ -282,9 +251,7 @@ export default function AvatarWidget(): JSX.Element {
     await playSpeech(reply);
   }
 
-  /* -------------------------
-     Toggle recognition
-     -------------------------*/
+  /* Toggle recognition */
   function toggleListening() {
     if (!isBrowser) return;
     const rec = recognitionRef.current;
@@ -303,31 +270,23 @@ export default function AvatarWidget(): JSX.Element {
       try {
         rec.stop();
         setListening(false);
-      } catch (e) {
-        // noop
-      }
+      } catch {}
     }
   }
 
-  /* -------------------------
-     Walk animation (across screen & back)
-     -------------------------*/
+  /* Walk animation (across screen & back) */
   async function animateWalk() {
     setIsWalking(true);
     const viewportWidth = isBrowser ? window.innerWidth : 1200;
-    // The movement range - tune multiplier to make it longer/shorter
     const distance = Math.min(viewportWidth * 0.75, selectedMascot.walkDistance ?? 800);
-    // Move right -> left -> right -> dock (gives a visible "walk across" motion)
     await controls.start({
-      x: [0, -distance, distance * 0.3, 0],
+      x: [0, -distance, distance * 0.35, 0],
       transition: { duration: 3.2, times: [0, 0.45, 0.8, 1], ease: "easeInOut" },
     });
     setIsWalking(false);
   }
 
-  /* -------------------------
-     keyboard shortcut (Ctrl/Cmd+K) toggles chat modal
-     -------------------------*/
+  /* Keyboard shortcut */
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -341,15 +300,11 @@ export default function AvatarWidget(): JSX.Element {
     }
   }, []);
 
-  /* -------------------------
-     Helper: choose which video (idle vs walk)
-     -------------------------*/
+  /* choose which video */
   const displayVideoSrc =
     isWalking && selectedMascot.video ? selectedMascot.video : selectedMascot.idleVideo ?? selectedMascot.video;
 
-  /* -------------------------
-     Render
-     -------------------------*/
+  /* Render */
   return (
     <div
       aria-live="polite"
